@@ -36,7 +36,7 @@ budget; an instance.
 | what | measurement | the control it scored against |
 |---|---|---|
 | CERTIFIED verdicts the exact lattice contradicts | **0** | integer coordinates, so the top-4 is known before any float runs — the only arm whose truth is not an oracle's |
-| enclosure escapes on the adversarial corpus | **0 of 272 pairs**, 8 configurations (2 kernels × 2 bounds × 2 rungs), 7 corpora | `exact.exact_sq`, scaled Python integers, no third-party arithmetic |
+| enclosure escapes on the adversarial corpus | **0 of 656 pairs** — 82 pairs in each of 8 configurations (2 kernels × 2 bounds × 2 rungs), over 10 corpora | `exact.exact_sq`, scaled Python integers, no third-party arithmetic |
 | enclosure escapes on the integer lattice | **0** | the known integer difference |
 | escalation contradicting a certificate | **0** over all 384 refused rows, 5,827 exact dot products | `exact_sq` re-decision of every refused row |
 | CERTIFIED on the recorded float16 range case | **0** | the float32 top-10 sets the float16 run was measured wrong against |
@@ -197,8 +197,11 @@ from scratch on this machine:
 
 ```
 python -c "import numpy as np; r=np.random.default_rng(11); X=r.standard_normal((2000,384)).astype(np.float32); X/=np.linalg.norm(X,axis=1,keepdims=True); Q=r.standard_normal((300,384)).astype(np.float32); Q/=np.linalg.norm(Q,axis=1,keepdims=True); np.save('X.npy',X); np.save('Q.npy',Q)"
-.venv/Scripts/python -m separatrix check --corpus X.npy --queries Q.npy --k 10
+.venv/Scripts/python -m separatrix check --corpus X.npy --queries Q.npy --k 10 --max-report 1
 ```
+
+`--max-report 1` caps what the CLI *prints*; the `Verdict` caps nothing, and the line
+naming the boundaries it did not print is part of the output.
 
 ```
 ==============================================================================
@@ -215,6 +218,12 @@ python -c "import numpy as np; r=np.random.default_rng(11); X=r.standard_normal(
   boundary    row 12: in #1046 [1.721866e+00, 1.722050e+00]  out #1342
               [1.721932e+00, 1.722116e+00]  gap 6.616116e-05  width
               1.840634e-04  deficit -1.179022e-04
+              14 further boundaries not shown (--max-report 1)
+------------------------------------------------------------------------------
+  next        The two enclosures at the rank-k boundary overlap. Pass
+              escalate=True to decide it exactly, or bound='tight', or
+              per_pair=True, or recompute in a wider dtype.
+==============================================================================
 ```
 
 Exit code 2. The `15 of 300` matches the iid row of §3's table and of §5's `gram refused`
@@ -227,12 +236,16 @@ verdict on one pair. Re-running the same corpus with the direct kernel, which is
 row-level question:
 
 ```
-.venv/Scripts/python -m separatrix check --corpus X.npy --queries Q.npy --k 10 --kernel direct
+.venv/Scripts/python -m separatrix check --corpus X.npy --queries Q.npy --k 10 --kernel direct --max-report 1
 
   REFUSED (BOUNDARY_UNDETERMINED)                         292/300 determined
-  detail      8 of 300 rows have a rank-10 boundary this enclosure does not decide
+  detail      8 of 300 rows have a rank-10 boundary this enclosure does not
+              decide
   computed    kernel direct   bound relative   per-pair   k 10
 ```
+
+(the header lines of that run; the boundary, dtype, canary and next blocks are the same
+shape as above and are not repeated here)
 
 `8 of 300` reproduces §5's `direct refused` column for this corpus, and 15 − 7 = 8 is
 consistent with it — but the two are separate measurements and the agreement is reported,
@@ -367,24 +380,29 @@ Best of 5, 5,000×784 float32 corpus, 300 queries, k = 10. Command:
 
 | | seconds | vs float64 gram | vs float32 gram |
 |---|---|---|---|
-| float32 gram + argpartition — the status quo | 0.0217 | 0.71× | 1.00× |
-| float64 gram + argpartition — **the honest control** | 0.0304 | 1.00× | 1.40× |
-| scipy.cdist float64 + argpartition | 0.3843 | 12.6× | 17.7× |
-| separatrix rung 1, per-row radii | **0.0505** | **1.66×** | 2.33× |
-| separatrix rung 2, per-pair radii | 0.0744 | 2.45× | 3.43× |
-| the float32-vs-float64 diff — the competing practice | 0.0504 | 1.66× | 2.32× |
+| float32 gram + argpartition — the status quo | 0.0233 | 0.66× | 1.00× |
+| float64 gram + argpartition — **the honest control** | 0.0353 | 1.00× | 1.51× |
+| scipy.cdist float64 + argpartition | 0.6112 | 17.32× | 26.19× |
+| separatrix rung 1, per-row radii | **0.0650** | **1.84×** | 2.78× |
+| separatrix rung 2, per-pair radii | 0.0861 | 2.44× | 3.69× |
+| the float32-vs-float64 diff — the competing practice | 0.0625 | 1.77× | 2.68× |
 
-**rung 1 against the diff it replaces: 1.00×.**
+**rung 1 against the diff it replaces: 1.04×.**
 
-Run-to-run spread on this machine, four runs of the same file: rung 1 sits at
-0.0393–0.0505 s and **1.37×–1.68×** the float64 control, and **1.00×–1.08×** the diff. A
-fifth run taken while a pip install was competing for the machine read 0.0661 s and 0.69×;
-it is named here rather than averaged in, because a favourable outlier under load is the
-one number a cost table must not quietly keep.
+Run-to-run spread on this machine, six runs over the same corpus — the printed draw above
+plus five repeats of `bench.cost_table` on the identical arrays: rung 1 sits at
+0.0544–0.0650 s, **1.59×–1.84×** the float64 control and **0.94×–1.17×** the diff. The
+printed draw is the slowest of the six and is printed anyway, because the run that produced
+the rest of this file is the run whose cost belongs beside them.
+
+**Struck:** an earlier build of this file quoted 0.0505 s, 1.66× the control and a
+0.0393–0.0505 s spread. None of that reproduces here — every one of the six observations
+above is slower than 0.0505 s — so it is removed rather than carried forward. The low end
+of a spread is the one number a cost table must not quietly retain.
 
 **Withdrawn:** the brief's *0.14× the cost of the fp64 reference* and the design's revised
 *0.91× fp64 / 0.54× the diff* both fail to reproduce. The honest words are **parity with
-the diff** and **roughly 1.7× the float64 control**, and neither is a selling point.
+the diff** and **roughly 1.8× the float64 control**, and neither is a selling point.
 
 ---
 
@@ -402,16 +420,18 @@ dishonestly.
   64 queries, clustered normalised d=384, one draw
     refused, a-priori gamma bound (this package)      64 / 64
     refused, Dot2 a-posteriori bound (the competitor)   0 / 64
-    throughput cost of Dot2                           48x to 78x, over four runs
+    throughput cost of Dot2                           81x to 117x, over six runs
 ```
 
-Dot2 certifies every boundary this package refuses, and it costs one to two orders of
-magnitude more because it is elementwise and forfeits the gemm entirely. The a-priori
-choice is a throughput decision, and it is a decision this measurement makes expensive to
-defend on coverage. Anyone who can afford 50× should use Dot2.
+Dot2 certifies every boundary this package refuses, and it costs two orders of magnitude
+more because it is elementwise and forfeits the gemm entirely. The a-priori choice is a
+throughput decision, and it is a decision this measurement makes expensive to defend on
+coverage. Anyone who can afford two orders of magnitude should use Dot2.
 
-The spread on the cost ratio is the a-priori denominator: one 600×384 gemm is ~3 ms and its
-run-to-run noise is most of the ratio's range. The direction is not in doubt.
+The spread on the cost ratio is the a-priori denominator: one 600×384 gemm reads 2.4–4.4 ms
+across those six runs while Dot2 holds at 0.26–0.36 s, so the denominator's noise is most
+of the ratio's range. The direction is not in doubt. An earlier build of this file quoted
+48× to 78× over four runs; that range does not reproduce and is struck.
 
 ### 7.2 The tuned-margin baseline draws on four of five corpora
 
@@ -460,8 +480,9 @@ MNIST-shaped, **32 against 15** on real MNIST.
 
 0 of 300 disagreements on four of five corpora, and the same 5 as separatrix on the fifth.
 **The status quo was right on 1,495 of 1,500 rankings measured here.** The diff needs two
-runs and proves nothing when it comes back empty; separatrix costs the same as the diff and
-returns a proof. That is the whole of the difference, and it is smaller than a headline.
+runs and proves nothing when it comes back empty; separatrix costs 0.94×–1.17× the diff
+over six runs — parity, inside the run-to-run spread — and returns a proof. That is the
+whole of the difference, and it is smaller than a headline.
 
 ### 7.5 The exact lattice's pessimism factor
 
@@ -520,7 +541,10 @@ certified here. CERTIFIED means *rounding did not choose this ranking*. A refusa
 no flip; only escalation decides which way a boundary falls, and on these corpora it decided
 that 379 of 384 refusals were pessimism. `ordered=True` compares k boundaries instead of one
 and refuses correspondingly more often; its column is never merged with the set column. The
-refusal actions that work offline — adopt a tie-break, escalate to exact — do not ship at a
-36% refusal rate, and the action that works in production is free and needs no library:
-retrieve k+5 and let the reranker absorb the boundary. Two of the five corpora above need a
-network; no number in `README.md` depends on either. Measured on CPython 3.11.9 only.
+refusal actions that work offline — adopt a tie-break, escalate to exact — do not ship at
+the 26% refusal rate measured here, 384 of 1,500 rows, and the action that works in
+production is free and needs no library: retrieve k+5 and let the reranker absorb the
+boundary. Two of the five corpora above need a network; every row drawn from them is
+labelled `(downloaded)` in this file and in `README.md`, and the three generated corpora
+reproduce offline and carry 550 of the 1,116 certified sets. Measured on CPython 3.11.9
+only.

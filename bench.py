@@ -817,8 +817,9 @@ def table(res: dict, ascii_only: bool = False) -> str:
         f"  commit {p['commit']}   machine {p['machine']}   python {p['python']}"
         f"   numpy {p['numpy']}   scipy {p['scipy']}   {p['seconds']} s",
         f"  seed {cfg['seed']}. Every corpus not marked (downloaded) is generated here, so",
-        "  those rows reproduce with no network. A downloaded corpus carries no number",
-        "  into README.md, because a reader without the download cannot check it.",
+        "  those rows reproduce with no network. A downloaded corpus keeps the",
+        "  (downloaded) mark wherever its number is quoted, because a reader without",
+        "  the download cannot check that row.",
         heavy,
     ]
     return "\n".join(L)
