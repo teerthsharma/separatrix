@@ -190,6 +190,54 @@ and only one of the two needed a second run to do it.
 
 Everything in the `confirmed fine` column is the a-priori bound's pessimism, measured.
 
+### 3.1 What one of those refusals looks like
+
+The iid row of the table above, through the CLI rather than through `bench.py`. Reproduced
+from scratch on this machine:
+
+```
+python -c "import numpy as np; r=np.random.default_rng(11); X=r.standard_normal((2000,384)).astype(np.float32); X/=np.linalg.norm(X,axis=1,keepdims=True); Q=r.standard_normal((300,384)).astype(np.float32); Q/=np.linalg.norm(Q,axis=1,keepdims=True); np.save('X.npy',X); np.save('Q.npy',Q)"
+.venv/Scripts/python -m separatrix check --corpus X.npy --queries Q.npy --k 10
+```
+
+```
+==============================================================================
+  REFUSED (BOUNDARY_UNDETERMINED)                         285/300 determined
+==============================================================================
+  detail      15 of 300 rows have a rank-10 boundary this enclosure does not
+              decide; the direct kernel separates 7 of those 15 frontier
+              pairs
+  computed    kernel gram   bound cheap   per-row   k 10
+  dtype       float32
+  canary      numpy/float32 clean
+  accumulator assumed storage dtype (P5 is not testable)
+------------------------------------------------------------------------------
+  boundary    row 12: in #1046 [1.721866e+00, 1.722050e+00]  out #1342
+              [1.721932e+00, 1.722116e+00]  gap 6.616116e-05  width
+              1.840634e-04  deficit -1.179022e-04
+```
+
+Exit code 2. The `15 of 300` matches the iid row of §3's table and of §5's `gram refused`
+column, from an independent draw of the same generator, and `width 1.840634e-04` is §5's
+median gram width at d=384.
+
+The `7 of those 15` is a **pair**-level measurement and is why `GRAM_CANCELLATION` is a
+reason code and never a certificate: certifying needs max-in/min-out over all n, not a
+verdict on one pair. Re-running the same corpus with the direct kernel, which is the
+row-level question:
+
+```
+.venv/Scripts/python -m separatrix check --corpus X.npy --queries Q.npy --k 10 --kernel direct
+
+  REFUSED (BOUNDARY_UNDETERMINED)                         292/300 determined
+  detail      8 of 300 rows have a rank-10 boundary this enclosure does not decide
+  computed    kernel direct   bound relative   per-pair   k 10
+```
+
+`8 of 300` reproduces §5's `direct refused` column for this corpus, and 15 − 7 = 8 is
+consistent with it — but the two are separate measurements and the agreement is reported,
+not derived.
+
 ---
 
 ## 4. The pessimism gate, and how it landed
@@ -277,6 +325,38 @@ np.float32(1e6)` is `True` — so `0.0` is the correct squared distance for the 
 stands and there is nothing to refuse. The frame runs in float64, where the inputs are
 distinct and the Gram identity still returns exactly `0.0`. Command:
 `.venv/Scripts/python -m separatrix demo --frame cancellation`.
+
+### 5.3 Frame 3 — the one frame no a-posteriori method can run
+
+A float64 diff, two batch sizes and stochastic rounding all find what *moved*. None of them
+can say a boundary was never determined on a row where the two runs happened to agree.
+Frame 3 names the undetermined rows from **one** evaluation, then runs a second one.
+Command: `.venv/Scripts/python -m separatrix demo --frame preview`.
+
+```
+  corpus 400 x 64 float32, 60 queries, k = 5, 40 near-duplicate pairs at 3e-07
+  named undetermined, from one evaluation:  9 of 60  [5, 13, 14, 22, 37, 39, 40, 54, 57]
+  actually differed, over two evaluations:   3 of 60  [14, 22, 54]
+  differed and NOT named:                    0  []
+```
+
+The second evaluation is `cli.permuted_evaluation` — the same formula on the same stored
+bytes with the `d` columns permuted identically, which leaves every exact score unchanged
+and changes every rounding. It needs nothing installed.
+
+**`differed and NOT named` is the only row that is evidence.** It is a soundness check, not
+a demonstration: a row that two evaluations decided differently and that was not named in
+advance is a counterexample to the certificate, and `frame_preview` returns exit 2 on one.
+Pinned by `test_frame_three_names_every_row_two_evaluations_decided_differently`.
+
+**The control is in the corpus, not in the table.** A corpus of nothing but near-duplicates
+refuses every row, and then "every row that differed was named" is true by construction and
+measures nothing. `cli.near_duplicate_corpus` puts 40 near-duplicate pairs in 400 points, so
+**51 of the 60 rows are certified and had something to lose** (60 minus the 9 named above).
+`test_the_demo_corpus_is_seeded_and_leaves_the_frame_something_to_lose` asserts the
+property — `0 < named < 60` — rather than the number. The 6 rows named
+and not differing are the a-priori bound's pessimism, in the same table as the 3 that were
+real. Seeded (`seed=3`, `seed=7`), deterministic across runs on this machine.
 
 ---
 
