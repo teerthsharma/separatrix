@@ -49,6 +49,9 @@ separatrix demo --frame preview
 import separatrix
 
 idx, v = separatrix.certified_topk(corpus, queries, k=10)   # replaces your argpartition
+j,   v = separatrix.certified_argmin(corpus, queries)       # the k=1 case, axis squeezed
+e      = separatrix.enclose_scores(corpus, queries)         # the scores and their radii
+trit   = separatrix.certified_threshold(e.D, e.R, t)        # +1 above, -1 below, 0 undetermined
 
 v.status        # CERTIFIED | CERTIFIED_UPCAST | NOT CERTIFIED | REFUSED
 v.n_refused     # an exact integer. never a score, never a probability
@@ -258,7 +261,7 @@ that records its own budget is vacuous.
 
 ## 📊 Benchmarks
 
-Pasted from the commands beside them, one draw, seed 11, commit `1b7a6dd`, on one machine —
+Pasted from the commands beside them, one draw, seed 11, commit `4ce5e0b`, on one machine —
 `WIN-16QAL06O9GB`, CPython 3.11.9, numpy 2.4.6, scipy 1.17.1, torch 2.14.0+cpu.
 **[Every table, every control, and every arm that lost →](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md)**
 
@@ -298,19 +301,19 @@ the one refusal in the catalogue that names a *code change* rather than a re-obs
 
 | | seconds | vs float64 gram | vs float32 gram |
 |---|---|---|---|
-| float32 gram + argpartition — the status quo | 0.0233 | 0.66× | 1.00× |
-| float64 gram + argpartition — **the honest control** | 0.0353 | 1.00× | 1.51× |
-| scipy.cdist float64 + argpartition | 0.6112 | 17.3× | 26.2× |
-| **separatrix rung 1**, per-row radii | **0.0650** | **1.84×** | 2.78× |
-| separatrix rung 2, per-pair radii | 0.0861 | 2.44× | 3.69× |
-| the float32-vs-float64 diff — the competing practice | 0.0625 | 1.77× | 2.68× |
+| float32 gram + argpartition — the status quo | 0.0229 | 0.73× | 1.00× |
+| float64 gram + argpartition — **the honest control** | 0.0314 | 1.00× | 1.37× |
+| scipy.cdist float64 + argpartition | 0.5357 | 17.1× | 23.4× |
+| **separatrix rung 1**, per-row radii | **0.0529** | **1.68×** | 2.31× |
+| separatrix rung 2, per-pair radii | 0.0730 | 2.33× | 3.18× |
+| the float32-vs-float64 diff — the competing practice | 0.0498 | 1.59× | 2.17× |
 
-**Parity with the diff it replaces (1.04×), and roughly 1.8× the float64 control.** Neither
+**Parity with the diff it replaces (1.06×), and roughly 1.7× the float64 control.** Neither
 is a selling point, and both are stated at their real size. Run-to-run spread over six runs
-of the same file, same corpus: rung 1 at 0.0544–0.0650 s, **1.59×–1.84×** the control and
-**0.94×–1.17×** the diff. An earlier build's reading of 0.0505 s and 1.66× does not
-reproduce on this machine and is struck rather than kept, because the low end of a spread
-is the one number a cost table must not quietly retain.
+of the same file, same corpus: rung 1 at 0.0517–0.0555 s, **1.59×–1.89×** the control and
+**0.96×–1.12×** the diff. Two earlier builds quoted 0.0505 s and 0.0650 s for this row;
+neither absolute reading reproduces and both are struck. The seconds move between builds
+and the ratios do not, so the ratios are the measurement and the seconds are the draw.
 → [§6](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#6-cost)
 
 ### The soundness gate — mandatory, an instance and not a budget
@@ -350,7 +353,7 @@ believable.** Three of these beat this design on their own axis.
 |---|---|---|
 | **CGAL** `Filtered_predicate` / `Interval_nt` ([manual](https://doc.cgal.org/latest/Number_types/index.html)) | **This exact rule, shipping since ~2001**: interval enclosure, disjoint-from-zero certifies the sign, overlap escalates to exact | a different adversary — a rank-k *set* boundary in 384 dimensions in Python, where the escalation target is a set rather than a sign |
 | **Melquiond & Pion**, static filter certification ([RAIRO Theor. Inform. Appl. 2007](https://doi.org/10.1051/ita:2007005)) | the same class of a-priori bound, **formally machine-checked** where these are only tested against an integer oracle | nothing on rigour. This is a gap, stated as one |
-| **Ogita–Rump–Oishi `Dot2`** ([SIAM J. Sci. Comput. 2005](https://doi.org/10.1137/030601818)) | an *a-posteriori* bound at `u` where this is *a-priori* at `(d+1)u`. Benchmarked here: it certifies **64 of 64** boundaries this package refuses | throughput only — Dot2 is elementwise and forfeits the gemm, at **81× to 117×** the cost over six runs. **If you can afford two orders of magnitude, use Dot2** |
+| **Ogita–Rump–Oishi `Dot2`** ([SIAM J. Sci. Comput. 2005](https://doi.org/10.1137/030601818)) | an *a-posteriori* bound at `u` where this is *a-priori* at `(d+1)u`. Benchmarked here: it certifies **64 of 64** boundaries this package refuses | throughput only — Dot2 is elementwise and forfeits the gemm, at **61× to 99×** the cost over six runs. **If you can afford roughly 100×, use Dot2** |
 | **Higham**, *ASNA* 2nd ed. ch. 3 | the bound itself, one page, Theorem 3.1 and (3.1) | the plumbing to a top-k set and a typed refusal |
 | **scikit-learn** [#9354](https://github.com/scikit-learn/scikit-learn/issues/9354) / [PR 13554](https://github.com/scikit-learn/scikit-learn/pull/13554) | fixed `euclidean_distances` fp32 instability by chunked upcasting, **on by default since it landed** | the diagnosis this is the mitigation *for*. It also shrinks the addressable population to `torch.cdist` above 25 rows, hand-rolled Gram code, and low-precision indexes |
 | **CADNA / Discrete Stochastic Arithmetic** ([site](http://cadna.lip6.fr/)) | unstable branching as a first-class counter — **the same output shape**, and older | a proof over a box instead of a 95% confidence estimate from three random-rounding runs, and a pip channel | <!-- # sx: quote -->
@@ -377,7 +380,7 @@ each other rather than by reading them.
 
 - 🪦 **A negative radius certified everything.** Precondition P3 admits `n·u == 1/2`, where `γ_n` is exactly 1.0 and rounds outward to `1.0000000000000002`. The Gram form multiplies by γ and stays sound; the direct kernel's *relative* form divides by `1 − γ` and produced a radius of **−9.224903e+14**, which inverts every interval so max-in falls below min-out and **the rule certifies every row**. Now `BOUND_VACUOUS`, pinned by two tests asserting `R ≥ 0` and `lo ≤ hi` over every kernel × bound × adversarial case. [→ §1.1](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#11-two-soundness-bugs-this-build-found-and-fixed)
 - 🪦 **A 64-frontier cap made refused rows read as certified.** With 69 refused rows out of 200, the 5 past the cap were invisible to any consumer reconstructing the refused set from `v.frontiers`, and two evaluations then "disagreed on 5 CERTIFIED rows". Measured: **5 apparent disagreements before, 0 after**, with 41 among refused on the same corpus. A `Verdict` now caps nothing; the CLI caps what it *prints*.
-- 🪦 **`0.14× the cost of the fp64 reference`.** The design's headline. It does not reproduce, and neither does its revision to `0.91×`. **Withdrawn.** The honest words are parity with the diff and ~1.8× the float64 control. [→ §6](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#6-cost)
+- 🪦 **`0.14× the cost of the fp64 reference`.** The design's headline. It does not reproduce, and neither does its revision to `0.91×`. **Withdrawn.** The honest words are parity with the diff and ~1.7× the float64 control. [→ §6](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#6-cost)
 - 🪦 **`summation="pairwise"` as a certificate.** Deleted. OpenBLAS accumulates with ~8 unrolled accumulators, giving reduction depth ≈ `d/8 + 3` ≈ 101 at d=784 against the pairwise model's `2·log₂(784)+2 = 21.2` — **4.8× too shallow, by counting, before any measurement**.
 - 📉 **The pre-registered prediction of `flipped = 0` on every corpus did not hold** — and it failed in the direction that helps least. The clustered arm flips **5 of 300**, and **the plain float32-vs-float64 diff finds the same 5**. So that arm is not one where separatrix saw what the practice missed; it is one where both saw the same thing and only one needed a second run. [→ §3](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#3-the-refusal-triple)
 - 📉 **The pessimism gate fired on the synthetic generator and the design's number was wrong in both directions.** The design predicted 107/300 on a clustered normalised d=384 index and generalised to real embeddings. Measured: **300/300 on the synthetic clustered generator, 2/300 on real BEIR SciFact**. The synthetic generator is far more adversarial than a real index, and **no number from it may be quoted as a statement about one**. [→ §4](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#4-the-pessimism-gate-and-how-it-landed)
@@ -391,7 +394,7 @@ Collected once, here.
 
 - **It certifies the rounding of one named formula on the bytes it was handed, and nothing else.** A 384-dim embedding out of a float16 forward pass carries ~1e-3 relative error, three to four orders above the float32 rounding certified. `CERTIFIED` means *rounding did not choose this ranking* — never that the ranking is right.
 - **Not a detection.** The float32-vs-float64 diff was right on **1,495 of 1,500** rankings measured here. The status quo is mostly fine; this returns a proof instead of an empty diff, at the same cost.
-- **Not faster than what it replaces.** 1.84× the float64 control, 1.04× the diff, on the printed draw. There is no speed story.
+- **Not faster than what it replaces.** 1.68× the float64 control, 1.06× the diff, on the printed draw. There is no speed story.
 - **Pessimistic where it matters most.** 379 of 384 refusals here were pessimism, not damage. The exact lattice puts the pessimism factor at **≤256×**, and that is an upper bound on the gap rather than a measurement of it. [→ §7.5](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#75-the-exact-lattices-pessimism-factor)
 - **The refusal actions that work offline do not ship at the 26% refusal rate measured here** — 384 of 1,500 rows. The action that works in production is free and needs no library: retrieve `k+5` and let the reranker absorb the boundary.
 - **`ordered=True` compares k boundaries instead of one** and refuses correspondingly more often. Its column is never merged with the set column.
@@ -404,9 +407,9 @@ Collected once, here.
 ## 🗺️ Roadmap
 
 - 🧊 **Make the pessimism the product.** The tight rung and per-pair radii already exist; the missing piece is an escalation that runs only on the frontier and turns a refusal into a decision at a bounded cost, so the 379 pessimistic refusals become 379 answers.
-- ⚡ **Dot2 as an opt-in rung.** It wins on coverage by a mile and loses on throughput by 81×–117×. That is a knob, not a verdict, and it should be exposed as one.
+- ⚡ **Dot2 as an opt-in rung.** It wins on coverage by a mile and loses on throughput by 61×–99×. That is a knob, not a verdict, and it should be exposed as one.
 - 🔬 **A machine-checked radius.** Melquiond and Pion did this for the static filters. The `gamma`/`eta` derivation is one page and is the part of this repository whose bugs are unsound rather than merely wrong.
-- 🧵 **The argmin and threshold surfaces**, which share the enclosure and need only their own boundary rules and their own refusal counts before they get a benchmark row.
+- 🧵 **A benchmark row for the argmin and threshold surfaces.** Both ship — `certified_argmin` is `certified_topk(k=1, largest=False)` and `certified_threshold` returns a trit array whose `0` is *undetermined* — and neither has a refusal count on any corpus above, so neither is quoted on this page.
 - 🖥️ **A GPU path** — currently a host copy before the enclosure, which is why there is no GPU number anywhere on this page.
 
 ---

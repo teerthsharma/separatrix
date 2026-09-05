@@ -380,29 +380,30 @@ Best of 5, 5,000×784 float32 corpus, 300 queries, k = 10. Command:
 
 | | seconds | vs float64 gram | vs float32 gram |
 |---|---|---|---|
-| float32 gram + argpartition — the status quo | 0.0233 | 0.66× | 1.00× |
-| float64 gram + argpartition — **the honest control** | 0.0353 | 1.00× | 1.51× |
-| scipy.cdist float64 + argpartition | 0.6112 | 17.32× | 26.19× |
-| separatrix rung 1, per-row radii | **0.0650** | **1.84×** | 2.78× |
-| separatrix rung 2, per-pair radii | 0.0861 | 2.44× | 3.69× |
-| the float32-vs-float64 diff — the competing practice | 0.0625 | 1.77× | 2.68× |
+| float32 gram + argpartition — the status quo | 0.0229 | 0.73× | 1.00× |
+| float64 gram + argpartition — **the honest control** | 0.0314 | 1.00× | 1.37× |
+| scipy.cdist float64 + argpartition | 0.5357 | 17.06× | 23.36× |
+| separatrix rung 1, per-row radii | **0.0529** | **1.68×** | 2.31× |
+| separatrix rung 2, per-pair radii | 0.0730 | 2.33× | 3.18× |
+| the float32-vs-float64 diff — the competing practice | 0.0498 | 1.59× | 2.17× |
 
-**rung 1 against the diff it replaces: 1.04×.**
+**rung 1 against the diff it replaces: 1.06×.**
 
 Run-to-run spread on this machine, six runs over the same corpus — the printed draw above
 plus five repeats of `bench.cost_table` on the identical arrays: rung 1 sits at
-0.0544–0.0650 s, **1.59×–1.84×** the float64 control and **0.94×–1.17×** the diff. The
-printed draw is the slowest of the six and is printed anyway, because the run that produced
-the rest of this file is the run whose cost belongs beside them.
+0.0517–0.0555 s, **1.59×–1.89×** the float64 control and **0.96×–1.12×** the diff. The
+printed draw is the run that produced the rest of this file, so its cost belongs beside
+them; it is the second-slowest of the six and neither end of the spread is hidden by it.
 
-**Struck:** an earlier build of this file quoted 0.0505 s, 1.66× the control and a
-0.0393–0.0505 s spread. None of that reproduces here — every one of the six observations
-above is slower than 0.0505 s — so it is removed rather than carried forward. The low end
-of a spread is the one number a cost table must not quietly retain.
+**Struck:** two earlier builds of this file quoted 0.0650 s and 0.0505 s for the rung-1
+row, with spreads of 0.0544–0.0650 s and 0.0393–0.0505 s. Neither absolute reading
+reproduces here and both are removed rather than carried forward. What survives across all
+three builds is the ratio band — rung 1 has never left 1.5×–1.9× the float64 control or
+0.9×–1.2× the diff — so the ratios are the measurement and the seconds are the draw.
 
 **Withdrawn:** the brief's *0.14× the cost of the fp64 reference* and the design's revised
 *0.91× fp64 / 0.54× the diff* both fail to reproduce. The honest words are **parity with
-the diff** and **roughly 1.8× the float64 control**, and neither is a selling point.
+the diff** and **roughly 1.7× the float64 control**, and neither is a selling point.
 
 ---
 
@@ -420,18 +421,22 @@ dishonestly.
   64 queries, clustered normalised d=384, one draw
     refused, a-priori gamma bound (this package)      64 / 64
     refused, Dot2 a-posteriori bound (the competitor)   0 / 64
-    throughput cost of Dot2                           81x to 117x, over six runs
+    throughput cost of Dot2                           64.1x on the printed draw,
+                                                      61x to 99x over six runs
 ```
 
-Dot2 certifies every boundary this package refuses, and it costs two orders of magnitude
-more because it is elementwise and forfeits the gemm entirely. The a-priori choice is a
-throughput decision, and it is a decision this measurement makes expensive to defend on
-coverage. Anyone who can afford two orders of magnitude should use Dot2.
+Dot2 certifies every boundary this package refuses, and it costs roughly 100× more because
+it is elementwise and forfeits the gemm entirely. The a-priori choice is a throughput
+decision, and it is a decision this measurement makes expensive to defend on coverage.
+Anyone who can afford roughly 100× should use Dot2.
 
-The spread on the cost ratio is the a-priori denominator: one 600×384 gemm reads 2.4–4.4 ms
-across those six runs while Dot2 holds at 0.26–0.36 s, so the denominator's noise is most
-of the ratio's range. The direction is not in doubt. An earlier build of this file quoted
-48× to 78× over four runs; that range does not reproduce and is struck.
+The spread on the cost ratio is the a-priori denominator: one 600×384 gemm reads 2.7–5.9 ms
+across those six runs while Dot2 holds at 0.23–0.36 s, so the denominator's noise is most
+of the ratio's range. **Struck:** two earlier builds of this file quoted 48×–78× over four
+runs and 81×–117× over six; neither range reproduces here and both are removed. A ratio
+whose denominator is a 3 ms gemm is a measurement of this machine's scheduler as much as of
+either algorithm, and the union of everything three builds have observed is 48×–117×. Only
+the direction is not in doubt.
 
 ### 7.2 The tuned-margin baseline draws on four of five corpora
 
@@ -480,7 +485,7 @@ MNIST-shaped, **32 against 15** on real MNIST.
 
 0 of 300 disagreements on four of five corpora, and the same 5 as separatrix on the fifth.
 **The status quo was right on 1,495 of 1,500 rankings measured here.** The diff needs two
-runs and proves nothing when it comes back empty; separatrix costs 0.94×–1.17× the diff
+runs and proves nothing when it comes back empty; separatrix costs 0.96×–1.12× the diff
 over six runs — parity, inside the run-to-run spread — and returns a proof. That is the
 whole of the difference, and it is smaller than a headline.
 
