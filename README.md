@@ -24,13 +24,14 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/frame1.svg" width="820" alt="separatrix demo --frame cancellation: two points 1e-6 apart at magnitude 1e6, the Gram identity returns 0.0 in float64, and separatrix returns REFUSED (GRAM_CANCELLATION) naming the code change">
+  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/hero.svg" width="100%" alt="SIFT1M, 1,000 queries against 1,000,000 vectors: 948 of 948 certified top-10 sets are identical to the ANN_SIFT1M authors published list, 52 queries were refused, and all 9 rows where the published answer differs had been refused first">
 </p>
 
-<p align="center"><i>Two distinct points, <code>1e-6</code> apart. The Gram identity your
-library switched to returns a distance of <b>exactly 0.0</b> — in <b>float64</b>, so
-upcasting is not the fix. <code>separatrix</code> refuses, and the refusal names the
-formula, not the precision.</i></p>
+<p align="center"><i><b>1,000</b> queries against the full <b>1,000,000</b>-row SIFT1M
+base, scored against the neighbour list the <b>ANN_SIFT1M authors published</b> — a
+control this repository did not compute. <b>948 of 948</b> certified sets match it. The
+<b>9</b> rows where it differs are exact ties, and every one had been <b>refused first</b>.
+→ <a href="https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#10-real-data-at-scale--sift1m-and-a-third-party-holding-the-answer">RESULTS.md §10</a></i></p>
 
 ```bash
 pip install separatrix        # or:  uv pip install separatrix
@@ -83,7 +84,11 @@ flowchart LR
 5. 🛑 **Or refuse.** Overlap → `REFUSED`, with the frontier pair, both intervals, the `gap`, the `width`, the `deficit`, a typed code, and a next action. Never a hedge, never a score.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/switch.svg" width="820" alt="torch.cdist switches formula above 25 rows: max |mm − direct| is 0.000e+00 at 24 and 25 rows and 9.766e-04 at 26 rows on one 40x8 float32 array">
+  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/boundary.svg" width="100%" alt="The rule on two real SIFT1M queries: on query 0 the 10th and 11th neighbour enclosures are 1,483 apart against a width of 16.11 and the set is CERTIFIED; on query 93 both sit at 42,192 with gap 0.00, no cut fits between them, and separatrix refuses and names the pair 196106 and 274922">
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/cancellation.svg" width="100%" alt="Two distinct float64 points 1e-6 apart: the Gram identity returns 0.0, the direct sum and exact integers return 1.0000152290e-12, separatrix returns REFUSED (GRAM_CANCELLATION); torch.cdist is bit-identical at 24 and 25 rows and differs by 9.766e-04 at 26">
 </p>
 
 **This is why the library exists.** `torch.cdist` switches to the cancellation-prone Gram
@@ -268,7 +273,7 @@ Pasted from the commands beside them, one draw, seed 11, commit `4ce5e0b`, on on
 ### The headline — determinism across nine engines
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/agreement.svg" width="820" alt="0 certified top-10 sets moved across nine evaluations; the only movement, 8 rows, is on the clustered corpus and every one was refused first">
+  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/engines.svg" width="100%" alt="0 certified top-10 sets moved between any two of nine engines across five corpora; 1,116 certified of 1,500 decisions, and the 8 sets that did move were all refused first, on the clustered corpus">
 </p>
 
 | corpus | shape | refused | moved, CERTIFIED | moved, REFUSED first |
@@ -365,7 +370,8 @@ One CERTIFIED decision that exact arithmetic contradicts withdraws the package.
 python -m venv .venv
 .venv/Scripts/pip install -e .              # numpy and scipy are the only hard dependencies
 .venv/Scripts/python -m pytest tests/ -q    # 200 passed; 1 skips without the SIFT cache
-.venv/Scripts/python bench.py --out results.json --assets assets
+.venv/Scripts/python bench.py --out results.json
+.venv/Scripts/python make_assets.py --measure       # every picture in assets/
 .venv/Scripts/python bench.py --sift        # §10, downloads SIFT1M (516 MB) once
 ```
 

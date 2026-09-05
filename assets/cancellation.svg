@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 740" width="1600" height="740" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" role="img">
+<rect width="1600" height="740" rx="16" fill="#0B1015"/>
+<text x="64.0" y="64.0" fill="#EAF2F8" font-size="36" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" letter-spacing="1.5">separatrix</text>
+<text x="1536.0" y="64.0" fill="#8FA3B0" font-size="26" font-weight="400" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">float64 -- upcasting is not the fix</text>
+<line x1="64.0" y1="92.0" x2="1536.0" y2="92.0" stroke="#22303B" stroke-width="2"/>
+<text x="64.0" y="156.0" fill="#EAF2F8" font-size="30" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">x = (1e6, 0)     y = (1e6 + 1e-6, 0)     two distinct points</text>
+<text x="64.0" y="244.0" fill="#8FA3B0" font-size="28" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">||x||^2 + ||y||^2 - 2&lt;x,y&gt;</text>
+<text x="1180.0" y="252.0" fill="#FF6B5A" font-size="42" font-weight="700" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">0.0</text>
+<text x="1220.0" y="244.0" fill="#8FA3B0" font-size="26" font-weight="400">the Gram identity</text>
+<line x1="64.0" y1="280.0" x2="1536.0" y2="280.0" stroke="#22303B" stroke-width="1" opacity="0.7"/>
+<text x="64.0" y="328.0" fill="#8FA3B0" font-size="28" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">sum_l (x_l - y_l)^2</text>
+<text x="1180.0" y="336.0" fill="#EAF2F8" font-size="42" font-weight="700" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">1.0000152290e-12</text>
+<text x="1220.0" y="328.0" fill="#8FA3B0" font-size="26" font-weight="400">the direct sum</text>
+<line x1="64.0" y1="364.0" x2="1536.0" y2="364.0" stroke="#22303B" stroke-width="1" opacity="0.7"/>
+<text x="64.0" y="412.0" fill="#8FA3B0" font-size="28" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">exact, scaled integers</text>
+<text x="1180.0" y="420.0" fill="#6EA8FE" font-size="42" font-weight="700" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">1.0000152290e-12</text>
+<text x="1220.0" y="412.0" fill="#8FA3B0" font-size="26" font-weight="400">the control</text>
+<line x1="64.0" y1="448.0" x2="1536.0" y2="448.0" stroke="#22303B" stroke-width="1" opacity="0.7"/>
+<rect x="64.0" y="500.0" width="1472.0" height="100.0" rx="14" fill="#121B23"/>
+<text x="104.0" y="562.0" fill="#F5B33C" font-size="46" font-weight="700">REFUSED</text>
+<text x="330.0" y="542.0" fill="#F5B33C" font-size="28" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">GRAM_CANCELLATION</text>
+<text x="330.0" y="578.0" fill="#8FA3B0" font-size="26" font-weight="400">next: pass kernel='direct' -- a code change, not a re-run at higher precision</text>
+<text x="1496.0" y="562.0" fill="#8FA3B0" font-size="26" font-weight="400" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">radius 1.776e-03</text>
+<text x="64.0" y="648.0" fill="#EAF2F8" font-size="28" font-weight="400">torch.cdist switches to this identity above 25 rows, on one 40x8 float32 array:</text>
+<text x="64.0" y="692.0" fill="#2FD98A" font-size="28" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">24 rows  0.000e+00</text>
+<text x="404.0" y="692.0" fill="#2FD98A" font-size="28" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">25 rows  0.000e+00</text>
+<text x="744.0" y="692.0" fill="#FF6B5A" font-size="28" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">26 rows  9.766e-04</text>
+</svg>

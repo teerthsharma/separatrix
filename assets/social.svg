@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" role="img">
+<rect width="1280" height="640" rx="0" fill="#0B1015"/>
+<text x="72.0" y="122.0" fill="#EAF2F8" font-size="74" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" letter-spacing="2">separatrix</text>
+<text x="72.0" y="186.0" fill="#EAF2F8" font-size="34" font-weight="400">Your top-10 changed when the batch size changed.</text>
+<text x="72.0" y="230.0" fill="#8FA3B0" font-size="34" font-weight="400">Get a proof it was never yours.</text>
+<line x1="72.0" y1="272.0" x2="1208.0" y2="272.0" stroke="#22303B" stroke-width="2"/>
+<rect x="72.0" y="306.0" width="368.0" height="204.0" rx="14" fill="#121B23"/>
+<text x="100.0" y="400.0" fill="#2FD98A" font-size="62" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">0</text>
+<text x="100.0" y="444.0" fill="#EAF2F8" font-size="26" font-weight="400">certified sets moved</text>
+<text x="100.0" y="478.0" fill="#8FA3B0" font-size="24" font-weight="400">across 9 distinct engines</text>
+<rect x="464.0" y="306.0" width="368.0" height="204.0" rx="14" fill="#121B23"/>
+<text x="492.0" y="400.0" fill="#6EA8FE" font-size="62" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">948/948</text>
+<text x="492.0" y="444.0" fill="#EAF2F8" font-size="26" font-weight="400">match a third party</text>
+<text x="492.0" y="478.0" fill="#8FA3B0" font-size="24" font-weight="400">SIFT1M, 1,000,000 x 128</text>
+<rect x="856.0" y="306.0" width="368.0" height="204.0" rx="14" fill="#121B23"/>
+<text x="884.0" y="400.0" fill="#F5B33C" font-size="62" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">52</text>
+<text x="884.0" y="444.0" fill="#EAF2F8" font-size="26" font-weight="400">refused, each pair named</text>
+<text x="884.0" y="478.0" fill="#8FA3B0" font-size="24" font-weight="400">a refusal is a return value</text>
+<text x="72.0" y="588.0" fill="#EAF2F8" font-size="30" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">pip install separatrix</text>
+<text x="1208.0" y="588.0" fill="#8FA3B0" font-size="26" font-weight="400" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">one O(nd) pass, no probability in the output</text>
+</svg>

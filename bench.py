@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import pathlib
 import platform
 import subprocess
 import sys
@@ -1078,156 +1077,6 @@ def table(res: dict, ascii_only: bool = False) -> str:
 
 
 # --------------------------------------------------------------------------------------
-# the assets -- generated from the SAME results dict as the tables, never hand-drawn
-# --------------------------------------------------------------------------------------
-
-# One dark panel in both GitHub themes.  A picture that carries its own background is
-# legible in light mode and dark mode without a media query the renderer may drop, and it
-# is the terminal these numbers actually came out of.
-INK = "#e6edf3"
-DIM = "#8b949e"
-PANEL = "#0d1117"
-LINE = "#30363d"
-GOOD = "#3fb950"
-WARN = "#d29922"
-CALL = "#58a6ff"
-MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
-
-
-def _esc(t):
-    return (t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
-
-
-def _svg(w, h, body):
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" '
-        f'height="{h}" font-family="{MONO}">\n'
-        f'  <rect width="{w}" height="{h}" rx="8" fill="{PANEL}"/>\n'
-        + body
-        + "\n</svg>\n"
-    )
-
-
-def _text(x, y, t, fill=INK, size=13, weight="normal", anchor="start"):
-    return (
-        f'  <text x="{x}" y="{y}" fill="{fill}" font-size="{size}" '
-        f'font-weight="{weight}" text-anchor="{anchor}">{_esc(t)}</text>'
-    )
-
-
-def asset_switch(res) -> str:
-    """The origin observation as one picture: the answer changes at 26 rows."""
-    tor = res.get("torch")
-    if not tor:
-        return ""
-    rows = [(int(r), float(v)) for r, v in tor["spread"].items()]
-    w, h = 900, 340
-    x0, y0, bw, gap = 90, 250, 84, 40
-    body = [
-        _text(30, 40, "torch.cdist switches formula above 25 rows", INK, 19, "bold"),
-        _text(30, 66, f"max |mm - direct| on one 40x8 float32 array, torch "
-                      f"{tor['version']}, same stored bytes", DIM, 13),
-        f'  <line x1="30" y1="{y0}" x2="{w - 30}" y2="{y0}" stroke="{LINE}"/>',
-    ]
-    top = max(v for _, v in rows) or 1.0
-    for i, (r, v) in enumerate(rows):
-        x = x0 + i * (bw + gap)
-        hgt = 0 if v == 0 else max(8, 150 * (v / top))
-        col = GOOD if v == 0 else WARN
-        body.append(
-            f'  <rect x="{x}" y="{y0 - hgt}" width="{bw}" height="{hgt}" fill="{col}" '
-            f'rx="2"/>'
-        )
-        body.append(_text(x + bw / 2, y0 - hgt - 10, f"{v:.3e}", col, 12, "bold", "middle"))
-        body.append(_text(x + bw / 2, y0 + 22, f"{r} rows", INK, 13, "normal", "middle"))
-    body.append(_text(30, 296, "0.000e+00 = bit-identical to the direct kernel.  Above the "
-                               "switch the same call", DIM, 13))
-    body.append(_text(30, 316, "on the same bytes returns a different number, and "
-                               "separatrix says which decisions it moved.", DIM, 13))
-    return _svg(w, h, "\n".join(body))
-
-
-def asset_agreement(res) -> str:
-    """The claim, per corpus: what moved, and whether separatrix had named it first."""
-    cs = res["corpora"]
-    w = 900
-    h = 150 + 46 * len(cs)
-    body = [
-        _text(30, 40, "0 certified top-10 sets moved. Every set that moved was refused "
-                      "first.", INK, 19, "bold"),
-        _text(30, 66, f"{len(cs[0]['evaluations'])} numerically distinct evaluations of one "
-                      f"formula on one set of stored bytes, {cs[0]['shape'][2]} queries, "
-                      f"k = {cs[0]['k']}", DIM, 13),
-        _text(660, 102, "top-10 sets that moved between two evaluations", DIM, 12,
-              anchor="middle"),
-        _text(560, 122, "CERTIFIED", GOOD, 12, "bold", "middle"),
-        _text(760, 122, "REFUSED first", WARN, 12, "bold", "middle"),
-    ]
-    y = 152
-    for c in cs:
-        moved_c = len(c["certified_disagreeing"])
-        moved_r = len(c["refused_disagreeing"])
-        body.append(_text(30, y, c["name"], INK, 14))
-        body.append(_text(30, y + 17, f"{c['shape'][0]} x {c['shape'][1]} {c['dtype']}, "
-                                      f"{c['refused']} of {c['shape'][2]} refused", DIM, 11))
-        body.append(_text(560, y, str(moved_c), GOOD if moved_c == 0 else WARN, 20, "bold",
-                          "middle"))
-        body.append(_text(760, y, str(moved_r), WARN if moved_r else DIM, 20, "bold",
-                          "middle"))
-        body.append(f'  <line x1="30" y1="{y + 26}" x2="{w - 30}" y2="{y + 26}" '
-                    f'stroke="{LINE}"/>')
-        y += 46
-    body.append(_text(30, y + 16, "A 0 in the right column is an arm where this package had "
-                                  "nothing to say, not a win.", DIM, 12))
-    return _svg(w, h + 20, "\n".join(body))
-
-
-def asset_frame1(res) -> str:
-    """Frame 1 as the terminal prints it: one command, one refusal, one code change."""
-    import io
-
-    from separatrix.cli import frame_cancellation
-
-    buf = io.StringIO()
-    frame_cancellation(buf, ascii_only=True)
-    lines = ["$ separatrix demo --frame cancellation", ""] + buf.getvalue().splitlines()
-    lines = [ln for ln in lines if ln.strip()]
-    w = 900
-    h = 46 + 18 * len(lines)
-    body = []
-    y = 40
-    for ln in lines:
-        fill = INK
-        if ln.startswith("$"):
-            fill = CALL
-        elif set(ln.strip()) <= set("=-"):
-            fill = LINE
-        elif "REFUSED" in ln or "GRAM_CANCELLATION" in ln:
-            fill = WARN
-        elif ln.startswith("  next") or ln.startswith("              "):
-            fill = DIM
-        body.append(_text(24, y, ln, fill, 12.5))
-        y += 18
-    return _svg(w, h, "\n".join(body))
-
-
-def write_assets(res, out_dir) -> list[str]:
-    d = pathlib.Path(out_dir)
-    d.mkdir(parents=True, exist_ok=True)
-    written = []
-    for name, svg in (
-        ("switch.svg", asset_switch(res)),
-        ("agreement.svg", asset_agreement(res)),
-        ("frame1.svg", asset_frame1(res)),
-    ):
-        if not svg:
-            continue
-        (d / name).write_text(svg, encoding="utf-8")
-        written.append(str(d / name))
-    return written
-
-
-# --------------------------------------------------------------------------------------
 # self-check:  .venv/Scripts/python bench.py --selfcheck
 # --------------------------------------------------------------------------------------
 
@@ -1261,8 +1110,6 @@ def main(argv=None) -> int:
     p.add_argument("--out", default=None, metavar="results.json")
     p.add_argument("--no-download", action="store_true", dest="no_download",
                    help="skip the MNIST and SciFact arms instead of attempting them")
-    p.add_argument("--assets", default=None, metavar="DIR",
-                   help="write the README's pictures from this same run")
     p.add_argument("--sift", action="store_true",
                    help="run only the SIFT1M real-data arm (RESULTS section 10)")
     p.add_argument("--selfcheck", action="store_true")
@@ -1290,9 +1137,6 @@ def main(argv=None) -> int:
         with open(a.out, "w", encoding="utf-8") as fh:
             json.dump(res, fh, indent=2)
         print(f"  results -> {a.out}")
-    if a.assets:
-        for f in write_assets(res, a.assets):
-            print(f"  asset   -> {f}")
     return 0
 
 

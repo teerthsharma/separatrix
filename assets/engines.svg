@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" role="img">
+<rect width="1600" height="1000" rx="16" fill="#0B1015"/>
+<text x="64.0" y="64.0" fill="#EAF2F8" font-size="36" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" letter-spacing="1.5">separatrix</text>
+<text x="1536.0" y="64.0" fill="#8FA3B0" font-size="26" font-weight="400" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">1,500 top-10 decisions, one set of stored bytes</text>
+<line x1="64.0" y1="92.0" x2="1536.0" y2="92.0" stroke="#22303B" stroke-width="2"/>
+<text x="64.0" y="268.0" fill="#2FD98A" font-size="160" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">0</text>
+<text x="200.0" y="208.0" fill="#EAF2F8" font-size="34" font-weight="400">certified top-10 sets moved between any two of the</text>
+<text x="200.0" y="250.0" fill="#EAF2F8" font-size="34" font-weight="400">nine numerically distinct evaluations of one formula.</text>
+<text x="200.0" y="294.0" fill="#8FA3B0" font-size="28" font-weight="400">1,116 certified of 1,500. Every set that did move had been refused first.</text>
+<text x="64.0" y="374.0" fill="#8FA3B0" font-size="26" font-weight="400">each tick is one query</text>
+<circle cx="560.0" cy="365.0" r="8" fill="#2FD98A"/>
+<text x="578.0" y="374.0" fill="#8FA3B0" font-size="26" font-weight="400">certified</text>
+<circle cx="740.0" cy="365.0" r="8" fill="#F5B33C"/>
+<text x="758.0" y="374.0" fill="#8FA3B0" font-size="26" font-weight="400">refused</text>
+<circle cx="900.0" cy="365.0" r="9" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<text x="920.0" y="374.0" fill="#6EA8FE" font-size="26" font-weight="400">set moved between engines</text>
+<text x="64.0" y="428.0" fill="#EAF2F8" font-size="28" font-weight="400">iid normalised d=384</text>
+<text x="64.0" y="462.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">2,000 x 384 float32, 15 of 300 refused</text>
+<rect x="700.0" y="408.0" width="820.0" height="46.0" rx="3" fill="#2FD98A" opacity="0.9"/>
+<rect x="732.8" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="817.5" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="858.5" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="918.7" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="937.8" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="997.9" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1115.5" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1131.9" y="408.0" width="5.5" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1194.7" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1276.7" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1298.6" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1325.9" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1369.7" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1377.9" y="408.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<text x="64.0" y="516.0" fill="#EAF2F8" font-size="28" font-weight="400">clustered normalised d=384</text>
+<text x="64.0" y="550.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">2,000 x 384 float32, 300 of 300 refused</text>
+<rect x="700.0" y="496.0" width="820.0" height="46.0" rx="3" fill="#2FD98A" opacity="0.9"/>
+<rect x="700.0" y="496.0" width="820.0" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<circle cx="758.8" cy="519.0" r="14" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<circle cx="922.8" cy="519.0" r="14" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<circle cx="950.1" cy="519.0" r="14" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<circle cx="963.8" cy="519.0" r="14" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<circle cx="1141.4" cy="519.0" r="14" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<circle cx="1280.8" cy="519.0" r="14" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<circle cx="1346.4" cy="519.0" r="14" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<circle cx="1450.3" cy="519.0" r="14" fill="none" stroke="#6EA8FE" stroke-width="3"/>
+<text x="64.0" y="604.0" fill="#EAF2F8" font-size="28" font-weight="400">MNIST-shaped (generated) d=784</text>
+<text x="64.0" y="638.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">2,000 x 784 float32, 35 of 300 refused</text>
+<rect x="700.0" y="584.0" width="820.0" height="46.0" rx="3" fill="#2FD98A" opacity="0.9"/>
+<rect x="719.1" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="795.7" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="847.6" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="855.8" y="584.0" width="5.5" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="910.5" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="932.3" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="976.1" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1014.3" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1033.5" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1041.7" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1071.7" y="584.0" width="5.5" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1104.5" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1123.7" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1129.1" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1151.0" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1161.9" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1183.8" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1200.2" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1211.1" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1293.1" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1298.6" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1304.1" y="584.0" width="5.5" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1350.5" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1364.2" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1375.1" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1418.9" y="584.0" width="5.5" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1440.7" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1448.9" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1459.9" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1484.5" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1492.7" y="584.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<text x="64.0" y="692.0" fill="#EAF2F8" font-size="28" font-weight="400">mnist (downloaded)</text>
+<text x="64.0" y="726.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">5,000 x 784 float32, 32 of 300 refused</text>
+<rect x="700.0" y="672.0" width="820.0" height="46.0" rx="3" fill="#2FD98A" opacity="0.9"/>
+<rect x="705.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="730.1" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="735.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="741.0" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="806.6" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="828.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="847.6" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="872.2" y="672.0" width="5.5" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="891.3" y="672.0" width="5.5" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="910.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="935.1" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="940.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="992.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1019.8" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1115.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1137.3" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1148.3" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1178.3" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1200.2" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1216.6" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1252.1" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1304.1" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1350.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1366.9" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1399.7" y="672.0" width="5.5" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1407.9" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1424.3" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1443.5" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1462.6" y="672.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<text x="64.0" y="780.0" fill="#EAF2F8" font-size="28" font-weight="400">scifact (downloaded)</text>
+<text x="64.0" y="814.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">4,883 x 384 float32, 2 of 300 refused</text>
+<rect x="700.0" y="760.0" width="820.0" height="46.0" rx="3" fill="#2FD98A" opacity="0.9"/>
+<rect x="1134.6" y="760.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<rect x="1227.5" y="760.0" width="2.7" height="46.0" rx="3" fill="#F5B33C" opacity="0.95"/>
+<line x1="64.0" y1="844.0" x2="1536.0" y2="844.0" stroke="#22303B" stroke-width="1" opacity="0.7"/>
+<text x="64.0" y="886.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">gram fp32  ·  gram fp32, reduction permuted  ·  direct fp32</text>
+<text x="64.0" y="920.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">gram fp64  ·  scipy cdist fp64, squared  ·  sklearn chunked upcast fp32</text>
+<text x="64.0" y="954.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">torch.cdist mm  ·  torch.cdist direct  ·  torch.cdist batch 32</text>
+</svg>

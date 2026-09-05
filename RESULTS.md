@@ -26,7 +26,8 @@ Reproduce everything:
 python -m venv .venv
 .venv/Scripts/pip install -e .
 .venv/Scripts/python -m pytest tests/ -q
-.venv/Scripts/python bench.py --out results.json --assets assets
+.venv/Scripts/python bench.py --out results.json
+.venv/Scripts/python make_assets.py --measure       # every picture in assets/
 .venv/Scripts/python bench.py --sift --out .donotcommit/sift.json   # section 10, 516 MB
 ```
 
@@ -147,7 +148,7 @@ below zero**, so the clamp changes 0 refusals on every corpus here.
 
 ## 2. The headline
 
-![agreement](assets/agreement.svg)
+![nine engines, 0 certified sets moved](assets/engines.svg)
 
 **Of 1,500 top-10 decisions across five corpora, 1,116 were certified and 0 of them moved
 between nine numerically distinct evaluations of one formula on one set of stored bytes.
@@ -311,8 +312,6 @@ re-observation.
 
 ### 5.1 The 25-row switch, measured on the installed torch
 
-![the 25-row switch](assets/switch.svg)
-
 One 40×8 float32 array, `torch 2.14.0+cpu`, the same stored bytes at every row count:
 
 | rows | max &#124;mm − direct&#124; | |
@@ -330,7 +329,7 @@ EARNED in the design until checked.
 
 ### 5.2 Frame 1 — changing the formula is the fix; changing the precision is not
 
-![frame 1](assets/frame1.svg)
+![the Gram identity returns 0.0 in float64 on two distinct points](assets/cancellation.svg)
 
 ```
   x = (1e6, 0)   y = (1e6 + 1e-6, 0)          all values float64
@@ -582,6 +581,8 @@ fetch     separatrix.corpus.sift1m() -- the loader is committed, the 516 MB is n
 shape     d = 128, k = 10, gram/cheap float32 unless a row says otherwise
 ```
 
+![SIFT1M: 948 of 948 certified sets match the published truth, 52 refused, 9 disagreements all refused first](assets/hero.svg)
+
 Command for every number in this section:
 
 ```
@@ -658,6 +659,8 @@ frontier has **gap 7.0 against width 16.12**, while the true error is **0**.
 | how many of those 9 had been refused first | **9 of 9** | — |
 | how many of those 9 exact arithmetic calls a tie | **9 of 9** | `exact.escalate_row`, scaled-integer |
 | how many of those 9 were a float set exact arithmetic moved | **0** | same |
+
+![the rank-10 boundary on query 0 and query 93](assets/boundary.svg)
 
 **Every disagreement with the third party is an exact tie, and every one of them was
 refused before it was found.** On a tie both answers are correct and no arithmetic decides
