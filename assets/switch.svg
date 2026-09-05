@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" width="900" height="340" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
+  <rect width="900" height="340" rx="8" fill="#0d1117"/>
+  <text x="30" y="40" fill="#e6edf3" font-size="19" font-weight="bold" text-anchor="start">torch.cdist switches formula above 25 rows</text>
+  <text x="30" y="66" fill="#8b949e" font-size="13" font-weight="normal" text-anchor="start">max |mm - direct| on one 40x8 float32 array, torch 2.14.0+cpu, same stored bytes</text>
+  <line x1="30" y1="250" x2="870" y2="250" stroke="#30363d"/>
+  <rect x="90" y="250" width="84" height="0" fill="#3fb950" rx="2"/>
+  <text x="132.0" y="240" fill="#3fb950" font-size="12" font-weight="bold" text-anchor="middle">0.000e+00</text>
+  <text x="132.0" y="272" fill="#e6edf3" font-size="13" font-weight="normal" text-anchor="middle">24 rows</text>
+  <rect x="214" y="250" width="84" height="0" fill="#3fb950" rx="2"/>
+  <text x="256.0" y="240" fill="#3fb950" font-size="12" font-weight="bold" text-anchor="middle">0.000e+00</text>
+  <text x="256.0" y="272" fill="#e6edf3" font-size="13" font-weight="normal" text-anchor="middle">25 rows</text>
+  <rect x="338" y="143.93398100677527" width="84" height="106.06601899322473" fill="#d29922" rx="2"/>
+  <text x="380.0" y="133.93398100677527" fill="#d29922" font-size="12" font-weight="bold" text-anchor="middle">9.766e-04</text>
+  <text x="380.0" y="272" fill="#e6edf3" font-size="13" font-weight="normal" text-anchor="middle">26 rows</text>
+  <rect x="462" y="100.0" width="84" height="150.0" fill="#d29922" rx="2"/>
+  <text x="504.0" y="90.0" fill="#d29922" font-size="12" font-weight="bold" text-anchor="middle">1.381e-03</text>
+  <text x="504.0" y="272" fill="#e6edf3" font-size="13" font-weight="normal" text-anchor="middle">32 rows</text>
+  <rect x="586" y="100.0" width="84" height="150.0" fill="#d29922" rx="2"/>
+  <text x="628.0" y="90.0" fill="#d29922" font-size="12" font-weight="bold" text-anchor="middle">1.381e-03</text>
+  <text x="628.0" y="272" fill="#e6edf3" font-size="13" font-weight="normal" text-anchor="middle">40 rows</text>
+  <text x="30" y="296" fill="#8b949e" font-size="13" font-weight="normal" text-anchor="start">0.000e+00 = bit-identical to the direct kernel.  Above the switch the same call</text>
+  <text x="30" y="316" fill="#8b949e" font-size="13" font-weight="normal" text-anchor="start">on the same bytes returns a different number, and separatrix says which decisions it moved.</text>
+</svg>

@@ -124,7 +124,7 @@ class Corpus:
 # -- the input layer --------------------------------------------------------------------------
 
 
-def as_points(A, name: str = "X") -> np.ndarray:
+def as_points(A, name: str = "X", *, allow_int: bool = True) -> np.ndarray:
     """A caller's array as an (n, d) float array, or a usage error saying why not.
 
     A bare 1-D score array is the one input that must fail loudly.  An enclosure is a
@@ -136,6 +136,14 @@ def as_points(A, name: str = "X") -> np.ndarray:
     """
     A = np.asarray(A)
     if A.dtype.kind in "iub":
+        if not allow_int:
+            # The CLI door sets allow_int=False: an integer array has no rounding, so an
+            # enclosure over its float64 image would certify arithmetic the caller's
+            # pipeline never ran.  In-process construction (the corpora) may still upcast.
+            raise ValueError(
+                f"{name} is {A.dtype}; the certificate is about a float dtype, and an "
+                f"integer array carries no rounding for it to be about"
+            )
         A = A.astype(np.float64)
     if A.dtype.kind != "f":
         raise TypeError(f"{name} must be a real float array, got dtype {A.dtype}")
@@ -153,7 +161,8 @@ def as_points(A, name: str = "X") -> np.ndarray:
     return np.ascontiguousarray(A)
 
 
-def load(path, name: str | None = None, key: str | None = None) -> np.ndarray:
+def load(path, name: str | None = None, key: str | None = None, *,
+         allow_int: bool = True) -> np.ndarray:
     """One `.npy` or `.npz` file as an (n, d) float array.
 
     `.npz` with one array takes it; with several, `key` names it and the error lists the
@@ -166,19 +175,19 @@ def load(path, name: str | None = None, key: str | None = None) -> np.ndarray:
         raise FileNotFoundError(f"{label}: {p} does not exist")
     obj = np.load(p, allow_pickle=False)
     if isinstance(obj, np.ndarray):
-        return as_points(obj, label)
+        return as_points(obj, label, allow_int=allow_int)
     with obj as z:
         keys = list(z.files)
         if key is not None:
             if key not in keys:
                 raise ValueError(f"{label}: {p} has no array {key!r}; it has {keys}")
-            return as_points(z[key], f"{label}[{key}]")
+            return as_points(z[key], f"{label}[{key}]", allow_int=allow_int)
         if len(keys) != 1:
             raise ValueError(
                 f"{label}: {p} holds {len(keys)} arrays {keys}; name one with key= rather "
                 f"than letting the loader guess which is the corpus"
             )
-        return as_points(z[keys[0]], f"{label}[{keys[0]}]")
+        return as_points(z[keys[0]], f"{label}[{keys[0]}]", allow_int=allow_int)
 
 
 # -- C1: the exact lattice ------------------------------------------------------------------------

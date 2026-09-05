@@ -241,22 +241,16 @@ def refusal_verdict(e: Refusal, **kw) -> Verdict:
 
 
 def load_array(path: str) -> np.ndarray:
-    """One 2-D float array out of a ``.npy`` or a single-array ``.npz``."""
-    a = np.load(path, allow_pickle=False)
-    if isinstance(a, np.lib.npyio.NpzFile):
-        keys = list(a.files)
-        if len(keys) != 1:
-            raise ValueError(
-                f"{path} holds {len(keys)} arrays ({', '.join(keys)}); save the one you "
-                f"mean as a .npy, so the certificate names the array it was formed over"
-            )
-        a = a[keys[0]]
-    a = np.asarray(a)
-    if a.ndim != 2:
-        raise ValueError(f"{path} has shape {a.shape}; corpus and queries are 2-D")
-    if not np.issubdtype(a.dtype, np.floating):
-        raise ValueError(f"{path} is {a.dtype}; the certificate is about a float dtype")
-    return a
+    """One 2-D float array out of a ``.npy`` or a single-array ``.npz``.
+
+    Routed through ``corpus.load`` so the package has exactly one input door: a bare 1-D
+    score array then gets the same TypeError naming both producers whether it arrived
+    through the CLI or through ``certified_topk``.  ``allow_int=False`` because the
+    certificate is about a float dtype the caller's pipeline actually ran.
+    """
+    from .corpus import load
+
+    return load(path, name=path, allow_int=False)
 
 
 def _decisions():
@@ -281,7 +275,9 @@ def cmd_check(args, out) -> int:
     try:
         X = load_array(args.corpus)
         Q = load_array(args.queries)
-    except (OSError, ValueError) as e:
+    except (OSError, TypeError, ValueError) as e:
+        # All three are exit class 3: a bad path, a bare score array, a bad shape.  None
+        # of them is a Verdict, because none of them is a statement about the data.
         print(str(e), file=out)
         return EXIT_USAGE
 

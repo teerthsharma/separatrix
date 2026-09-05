@@ -359,6 +359,21 @@ def direct_radii(D: np.ndarray, d: int, work_dtype) -> np.ndarray:
     """
     dt = np.dtype(work_dtype)
     g = gamma(d + 1, dt)
+    if g >= 1.0:
+        # MEASURED BUG, not a hypothetical.  P3 admits n*u == 1/2, where gamma_n is exactly
+        # 1.0 and is rounded outward to 1.0000000000000002.  The Gram form multiplies by
+        # gamma and stays sound (an enormous, useless, POSITIVE radius); this relative form
+        # divides by 1 - gamma and produces a NEGATIVE one.  A negative radius inverts every
+        # interval, so max-in falls below min-out and the rule CERTIFIES everything.
+        # Reproduced on `corpus.adversarial("vacuous_f16_d1023")`: float16 at d = 1023 gives
+        # (d+1)u = 0.5 exactly, radius -9.22e+14, and `certified_topk(..., kernel="direct")`
+        # returned CERTIFIED over a bound that was not one.
+        raise Refusal(
+            BOUND_VACUOUS,
+            f"gamma_{d + 1} = {g!r} for {dt.name} is not below 1, so the direct kernel's "
+            f"relative form gamma/(1-gamma) is not a radius; the a-priori bound carries "
+            f"no information at this reduction length",
+        )
     R = np.maximum(D, 0.0) * (g / (1.0 - g))
     return _inflate(R, d, dt)
 

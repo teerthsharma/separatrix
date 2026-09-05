@@ -22,17 +22,17 @@ Read the headline correctly, or do not read it at all.
 Every control prints whichever way it lands, including the two that were expected to
 embarrass the design: the shuffled-enclosure control and the tuned-margin sweep.
 
-Not run here, and named rather than skipped silently: the torch backends (batch 32 against
-64, and the 25-row ``cdist`` switch), real MNIST and real BEIR SciFact with
-all-MiniLM-L6-v2 (both need a download), the Ogita-Rump-Oishi compensated-dot arm, and the
-scikit-learn chunked-upcast arm.  Every corpus below is generated, so every number here
-reproduces with no network.
+Every arm this run could not execute is named in its own output rather than skipped
+silently, and the list is computed from what is importable here rather than typed out.
+Every corpus not marked ``(downloaded)`` is generated, so those rows reproduce with no
+network.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import platform
 import subprocess
 import sys
@@ -123,7 +123,167 @@ def evaluations(X, Q, k):
         out["scipy cdist fp64, squared"] = cdist(Q64, X64, "sqeuclidean")
     except ImportError:  # pragma: no cover - scipy is a hard dependency
         pass
+    try:
+        # scikit-learn issue 9354 / PR 13554: euclidean_distances on float32 upcasts in
+        # chunks, on by default since it landed.  That is the mitigation this package
+        # certifies the need for, and here it is a ninth evaluation of the same formula --
+        # a better kernel should RAISE agreement, and if it does not, the enclosure is not
+        # tracking the real error.
+        from sklearn.metrics.pairwise import euclidean_distances
+
+        out["sklearn chunked upcast fp32"] = euclidean_distances(Q, X, squared=True)
+    except ImportError:
+        pass
+    t = _torch()
+    if t is not None:
+        # torch.cdist above its 25-row switch is the Gram identity; the keyword turns it
+        # off; two batch sizes are two reduction shapes over the same stored bytes.  None
+        # of the three is separatrix's arithmetic, which is the point of the table.
+        tX = t.from_numpy(np.ascontiguousarray(X))
+        tQ = t.from_numpy(np.ascontiguousarray(Q))
+        out["torch.cdist mm"] = t.cdist(tQ, tX).numpy()
+        out["torch.cdist direct"] = t.cdist(
+            tQ, tX, compute_mode=TORCH_DIRECT
+        ).numpy()
+        out["torch.cdist batch 32"] = np.concatenate(
+            [t.cdist(tQ[i : i + 32], tX).numpy() for i in range(0, tQ.shape[0], 32)]
+        )
     return {name: sets(D, k) for name, D in out.items()}
+
+
+TORCH_DIRECT = "donot_use_mm_for_euclid_dist"
+
+
+def _torch():
+    """torch, or None.  Imported lazily and never a hard dependency."""
+    try:
+        import torch as t
+    except ImportError:
+        return None
+    return t
+
+
+def torch_switch_arm(n=40, d=8, seed=0):
+    """The origin observation, measured on the installed torch rather than quoted.
+
+    ``torch.cdist`` switches to the cancellation-prone Gram identity above 25 rows because
+    it is ~100x faster.  Below the switch the two compute modes are bit-identical; above
+    it they are not, on the same stored bytes.  Also runs the frame-1 pair, where the Gram
+    path returns exactly 0.0 for two distinct points.
+    """
+    t = _torch()
+    if t is None:
+        return None
+    rng = np.random.default_rng(seed)
+    A = np.ascontiguousarray(rng.normal(size=(n, d)).astype(np.float32))
+    tA = t.from_numpy(A)
+    rows = {}
+    for r in (24, 25, 26, 32, n):
+        mm = t.cdist(tA[:r], tA[:r]).numpy()
+        direct = t.cdist(tA[:r], tA[:r], compute_mode=TORCH_DIRECT).numpy()
+        rows[r] = float(np.max(np.abs(mm - direct)))
+    P = np.array([[1e6, 0.0], [1e6 + 1e-6, 0.0]], dtype=np.float64)
+    tP = t.from_numpy(P)
+    return {
+        "version": t.__version__,
+        "spread": rows,
+        "keyword": TORCH_DIRECT,
+        "frame1_mm": float(
+            t.cdist(tP[:1], tP, compute_mode="use_mm_for_euclid_dist").numpy()[0, 1]
+        ),
+        "frame1_direct": float(
+            t.cdist(tP[:1], tP, compute_mode=TORCH_DIRECT).numpy()[0, 1]
+        ),
+    }
+
+
+# -- the Ogita-Rump-Oishi arm ---------------------------------------------------------------
+#
+# Dekker's TwoProduct and Knuth's TwoSum, in float32 arrays, so the throughput this arm
+# loses on is the real one.  Simulating the error-free transformation in float64 would give
+# the same values and a fictitious cost, which is the one way this arm could be made to
+# look good dishonestly.
+
+_SPLIT32 = np.float32(4097.0)  # 2**ceil(24/2) + 1
+
+
+def _two_sum(a, b):
+    s = a + b
+    bb = s - a
+    return s, (a - (s - bb)) + (b - bb)
+
+
+def _two_product(a, b):
+    p = a * b
+    ca, cb = _SPLIT32 * a, _SPLIT32 * b
+    ah = ca - (ca - a)
+    bh = cb - (cb - b)
+    al, bl = a - ah, b - bh
+    return p, (((ah * bh - p) + ah * bl) + al * bh) + al * bl
+
+
+def dot2_direct(X, q):
+    """Squared distances from q to every row of X by Dot2, plus its a-posteriori radius.
+
+    Ogita, Rump & Oishi 2005, Thm 5.3: ``|res - x'y| <= u|x'y| + gamma_n^2 * sum|x_i y_i|``.
+    Every term of ``sum_l (x_l - q_l)^2`` is non-negative, so ``sum|p_l| = res`` up to
+    rounding and the bound is relative at ``u`` rather than at ``gamma_{d+1} ~ (d+1)u``.
+    That is the tighter competitor, and it is why this arm is expected to win on coverage.
+    """
+    from separatrix.enclose import gamma, unit_roundoff
+
+    X = np.ascontiguousarray(X, dtype=np.float32)
+    q = np.ascontiguousarray(q, dtype=np.float32)
+    d = X.shape[1]
+    diff = (X - q).astype(np.float32)
+    p, e = _two_product(diff, diff)
+    # Sum2: one running compensated sum over the d products
+    s = p[:, 0].copy()
+    c = e[:, 0].copy()
+    for l in range(1, d):
+        s, err = _two_sum(s, p[:, l])
+        c = c + (err + e[:, l])
+    res = (s + c).astype(np.float64)
+    u = unit_roundoff(np.float32)
+    g = gamma(d, np.float32)
+    R = u * np.abs(res) + (g * g) * np.abs(res)
+    return res, R
+
+
+def dot2_arm(X, Q, k, rows=64):
+    """Coverage and throughput for Dot2 against the a-priori bound on the same corpus."""
+    from separatrix.enclose import enclose_scores
+
+    m = min(rows, Q.shape[0])
+    e = enclose_scores(X, Q, kernel="gram", bound="cheap", per_pair=False)
+    apriori = sum(
+        1 for i in range(m) if rows_determined(e.D[i : i + 1], e.R[i : i + 1], k)[0]
+    )
+    refused = 0
+    for i in range(m):
+        D, R = dot2_direct(X, Q[i])
+        if rows_determined(D[None, :], R[None, :], k)[0] is not None:
+            refused += 1
+
+    # Best of 5 on both sides.  A single-shot pair of timings on a 600x384 gemm moved the
+    # ratio from 19.8x to 52.3x between two runs of this file, which is a measurement of
+    # this machine's scheduler and not of either algorithm.
+    def run_dot2():
+        for i in range(m):
+            dot2_direct(X, Q[i])
+
+    dot2_seconds = timeit(run_dot2)
+    apriori_seconds = timeit(
+        lambda: enclose_scores(X, Q[:m], kernel="gram", bound="cheap", per_pair=False)
+    )
+    return {
+        "rows": m,
+        "refused_apriori": apriori,
+        "refused_dot2": refused,
+        "seconds_dot2": dot2_seconds,
+        "seconds_apriori": apriori_seconds,
+        "ratio": dot2_seconds / apriori_seconds if apriori_seconds else float("nan"),
+    }
 
 
 def disagreeing_rows(ev, m):
@@ -413,17 +573,31 @@ def run(n=2000, m=300, d=384, k=K_DEFAULT, seed=11, cost_n=5000, cost_d=784,
     Xc, Qc = corpus_mnist_shaped(cost_n, cost_d, m, np.random.default_rng(seed + 1))
     import scipy
 
+    torch_arm = torch_switch_arm()
+    not_run = []
+    if torch_arm is None:
+        not_run.append(
+            "torch: batch 32 against 64, and the 25-row cdist switch (torch not installed)"
+        )
+    Xd, Qd = corpus_clustered(600, d, 64, np.random.default_rng(seed + 2))
+    dot2 = dot2_arm(Xd, Qd, k)
+    try:
+        import sklearn  # noqa: F401
+    except ImportError:
+        not_run.append(
+            "scikit-learn chunked upcast as a falsifiable test of the bound itself "
+            "(scikit-learn not installed)"
+        )
+
     return {
         "config": {"n": n, "m": m, "d": d, "k": k, "seed": seed,
                    "cost_shape": [cost_n, cost_d, m]},
         "corpora": corpora,
         "lattice": lattice_arm(),
         "cost": cost_table(Xc, Qc, k),
-        "not_run": missing + [
-            "torch: batch 32 against 64, and the 25-row cdist switch (torch not installed)",
-            "Ogita-Rump-Oishi compensated dot (Dot2) as a tighter a-posteriori arm",
-            "scikit-learn chunked upcast as a falsifiable test of the bound itself",
-        ],
+        "torch": torch_arm,
+        "dot2": dot2,
+        "not_run": missing + not_run,
         "provenance": {
             "commit": _commit(),
             "machine": platform.node(),
@@ -586,8 +760,55 @@ def table(res: dict, ascii_only: bool = False) -> str:
         "    the measurement, not a claim: whatever they say is what this costs. The diff",
         "    is the competing practice and it needs two runs to prove nothing either way.",
         "    CPU only: a CUDA tensor forces a host copy before the enclosure.",
+    ]
+    tor = res.get("torch")
+    if tor:
+        L += [
+            "",
+            heavy,
+            "  the 25-row switch, measured on the installed torch rather than quoted.",
+            "  Same stored bytes, same call, and the answer changes because the row",
+            "  count crossed a threshold inside somebody else's library.",
+            heavy,
+            f"    torch {tor['version']}, compute_mode={tor['keyword']!r}",
+        ]
+        for r, spread in tor["spread"].items():
+            note = "identical" if float(spread) == 0.0 else "the Gram identity"
+            L.append(_row(f"{r} rows: max |mm - direct|", f"{float(spread):.3e}", note))
+        L += [
+            "    " + light[:64],
+            f"    frame 1, x = (1e6, 0) and y = (1e6 + 1e-6, 0) in float64:",
+            f"    torch mm returns {tor['frame1_mm']!r}, torch direct returns "
+            f"{tor['frame1_direct']!r}.",
+            "    Changing the formula is the fix. Changing the precision is not.",
+        ]
+
+    d2 = res.get("dot2")
+    if d2:
+        L += [
+            "",
+            heavy,
+            "  Ogita-Rump-Oishi Dot2, the direct competitor to the whole engine:",
+            "  an a-posteriori bound at u instead of an a-priori bound at (d+1)u.",
+            "  Expected to win on coverage and lose on throughput. Both print.",
+            heavy,
+            _row("rows compared", f"{d2['rows']}", "clustered normalised, one draw"),
+            _row("refused, a-priori gamma bound", f"{d2['refused_apriori']}", "this package"),
+            _row("refused, Dot2 a-posteriori bound", f"{d2['refused_dot2']}", "the competitor"),
+            _row("seconds, a-priori", f"{d2['seconds_apriori']:.4f}", "one BLAS gemm"),
+            _row("seconds, Dot2", f"{d2['seconds_dot2']:.4f}", "elementwise, no gemm"),
+            _row("Dot2 / a-priori", f"{d2['ratio']:.1f}x", "the throughput it forfeits"),
+            "    " + light[:64],
+            "    Dot2 is float32 arithmetic here -- Dekker TwoProduct, Knuth TwoSum --",
+            "    not a float64 simulation, because simulating it would give the same",
+            "    coverage at a fictitious cost, which is the one way this arm could be",
+            "    made to look good dishonestly.",
+        ]
+
+    L += [
+        "",
         heavy,
-        "  not run here:",
+        "  not run here:" if res["not_run"] else "  every arm named in the design ran here.",
     ]
     L += [f"    {s}" for s in res["not_run"]]
     p = res["provenance"]
@@ -601,6 +822,156 @@ def table(res: dict, ascii_only: bool = False) -> str:
         heavy,
     ]
     return "\n".join(L)
+
+
+# --------------------------------------------------------------------------------------
+# the assets -- generated from the SAME results dict as the tables, never hand-drawn
+# --------------------------------------------------------------------------------------
+
+# One dark panel in both GitHub themes.  A picture that carries its own background is
+# legible in light mode and dark mode without a media query the renderer may drop, and it
+# is the terminal these numbers actually came out of.
+INK = "#e6edf3"
+DIM = "#8b949e"
+PANEL = "#0d1117"
+LINE = "#30363d"
+GOOD = "#3fb950"
+WARN = "#d29922"
+CALL = "#58a6ff"
+MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+
+
+def _esc(t):
+    return (t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _svg(w, h, body):
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" '
+        f'height="{h}" font-family="{MONO}">\n'
+        f'  <rect width="{w}" height="{h}" rx="8" fill="{PANEL}"/>\n'
+        + body
+        + "\n</svg>\n"
+    )
+
+
+def _text(x, y, t, fill=INK, size=13, weight="normal", anchor="start"):
+    return (
+        f'  <text x="{x}" y="{y}" fill="{fill}" font-size="{size}" '
+        f'font-weight="{weight}" text-anchor="{anchor}">{_esc(t)}</text>'
+    )
+
+
+def asset_switch(res) -> str:
+    """The origin observation as one picture: the answer changes at 26 rows."""
+    tor = res.get("torch")
+    if not tor:
+        return ""
+    rows = [(int(r), float(v)) for r, v in tor["spread"].items()]
+    w, h = 900, 340
+    x0, y0, bw, gap = 90, 250, 84, 40
+    body = [
+        _text(30, 40, "torch.cdist switches formula above 25 rows", INK, 19, "bold"),
+        _text(30, 66, f"max |mm - direct| on one 40x8 float32 array, torch "
+                      f"{tor['version']}, same stored bytes", DIM, 13),
+        f'  <line x1="30" y1="{y0}" x2="{w - 30}" y2="{y0}" stroke="{LINE}"/>',
+    ]
+    top = max(v for _, v in rows) or 1.0
+    for i, (r, v) in enumerate(rows):
+        x = x0 + i * (bw + gap)
+        hgt = 0 if v == 0 else max(8, 150 * (v / top))
+        col = GOOD if v == 0 else WARN
+        body.append(
+            f'  <rect x="{x}" y="{y0 - hgt}" width="{bw}" height="{hgt}" fill="{col}" '
+            f'rx="2"/>'
+        )
+        body.append(_text(x + bw / 2, y0 - hgt - 10, f"{v:.3e}", col, 12, "bold", "middle"))
+        body.append(_text(x + bw / 2, y0 + 22, f"{r} rows", INK, 13, "normal", "middle"))
+    body.append(_text(30, 296, "0.000e+00 = bit-identical to the direct kernel.  Above the "
+                               "switch the same call", DIM, 13))
+    body.append(_text(30, 316, "on the same bytes returns a different number, and "
+                               "separatrix says which decisions it moved.", DIM, 13))
+    return _svg(w, h, "\n".join(body))
+
+
+def asset_agreement(res) -> str:
+    """The claim, per corpus: what moved, and whether separatrix had named it first."""
+    cs = res["corpora"]
+    w = 900
+    h = 150 + 46 * len(cs)
+    body = [
+        _text(30, 40, "0 certified top-10 sets moved. Every set that moved was refused "
+                      "first.", INK, 19, "bold"),
+        _text(30, 66, f"{len(cs[0]['evaluations'])} numerically distinct evaluations of one "
+                      f"formula on one set of stored bytes, {cs[0]['shape'][2]} queries, "
+                      f"k = {cs[0]['k']}", DIM, 13),
+        _text(660, 102, "top-10 sets that moved between two evaluations", DIM, 12,
+              anchor="middle"),
+        _text(560, 122, "CERTIFIED", GOOD, 12, "bold", "middle"),
+        _text(760, 122, "REFUSED first", WARN, 12, "bold", "middle"),
+    ]
+    y = 152
+    for c in cs:
+        moved_c = len(c["certified_disagreeing"])
+        moved_r = len(c["refused_disagreeing"])
+        body.append(_text(30, y, c["name"], INK, 14))
+        body.append(_text(30, y + 17, f"{c['shape'][0]} x {c['shape'][1]} {c['dtype']}, "
+                                      f"{c['refused']} of {c['shape'][2]} refused", DIM, 11))
+        body.append(_text(560, y, str(moved_c), GOOD if moved_c == 0 else WARN, 20, "bold",
+                          "middle"))
+        body.append(_text(760, y, str(moved_r), WARN if moved_r else DIM, 20, "bold",
+                          "middle"))
+        body.append(f'  <line x1="30" y1="{y + 26}" x2="{w - 30}" y2="{y + 26}" '
+                    f'stroke="{LINE}"/>')
+        y += 46
+    body.append(_text(30, y + 16, "A 0 in the right column is an arm where this package had "
+                                  "nothing to say, not a win.", DIM, 12))
+    return _svg(w, h + 20, "\n".join(body))
+
+
+def asset_frame1(res) -> str:
+    """Frame 1 as the terminal prints it: one command, one refusal, one code change."""
+    import io
+
+    from separatrix.cli import frame_cancellation
+
+    buf = io.StringIO()
+    frame_cancellation(buf, ascii_only=True)
+    lines = ["$ separatrix demo --frame cancellation", ""] + buf.getvalue().splitlines()
+    lines = [ln for ln in lines if ln.strip()]
+    w = 900
+    h = 46 + 18 * len(lines)
+    body = []
+    y = 40
+    for ln in lines:
+        fill = INK
+        if ln.startswith("$"):
+            fill = CALL
+        elif set(ln.strip()) <= set("=-"):
+            fill = LINE
+        elif "REFUSED" in ln or "GRAM_CANCELLATION" in ln:
+            fill = WARN
+        elif ln.startswith("  next") or ln.startswith("              "):
+            fill = DIM
+        body.append(_text(24, y, ln, fill, 12.5))
+        y += 18
+    return _svg(w, h, "\n".join(body))
+
+
+def write_assets(res, out_dir) -> list[str]:
+    d = pathlib.Path(out_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    written = []
+    for name, svg in (
+        ("switch.svg", asset_switch(res)),
+        ("agreement.svg", asset_agreement(res)),
+        ("frame1.svg", asset_frame1(res)),
+    ):
+        if not svg:
+            continue
+        (d / name).write_text(svg, encoding="utf-8")
+        written.append(str(d / name))
+    return written
 
 
 # --------------------------------------------------------------------------------------
@@ -637,6 +1008,8 @@ def main(argv=None) -> int:
     p.add_argument("--out", default=None, metavar="results.json")
     p.add_argument("--no-download", action="store_true", dest="no_download",
                    help="skip the MNIST and SciFact arms instead of attempting them")
+    p.add_argument("--assets", default=None, metavar="DIR",
+                   help="write the README's pictures from this same run")
     p.add_argument("--selfcheck", action="store_true")
     a = p.parse_args(argv)
     if a.selfcheck:
@@ -654,6 +1027,9 @@ def main(argv=None) -> int:
         with open(a.out, "w", encoding="utf-8") as fh:
             json.dump(res, fh, indent=2)
         print(f"  results -> {a.out}")
+    if a.assets:
+        for f in write_assets(res, a.assets):
+            print(f"  asset   -> {f}")
     return 0
 
 

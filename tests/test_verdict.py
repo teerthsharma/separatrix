@@ -173,13 +173,54 @@ def test_frontier_deficit_is_gap_minus_width():
     assert V.Frontier(0, 1, 2, 0.9, 1.1, 1.5, 1.7, gap=0.6, width=0.4).determined
 
 
+BLOCKER = """
+import sys
+
+class Block:
+    BANNED = ("torch", "faiss", "datasets", "sentence_transformers")
+
+    def find_module(self, name, path=None):
+        return self.find_spec(name, path)
+
+    def find_spec(self, name, path=None, target=None):
+        if name.split(".")[0] in self.BANNED:
+            raise ImportError("blocked: " + name)
+        return None
+
+sys.meta_path.insert(0, Block())
+
+import numpy as np
+import separatrix
+
+assert separatrix.gamma(386, "float32") > 0
+for banned in Block.BANNED:
+    assert banned not in sys.modules, banned
+
+rng = np.random.default_rng(0)
+X = rng.normal(size=(120, 12)).astype(np.float32)
+Q = X[:4] + np.float32(1e-2) * rng.normal(size=(4, 12)).astype(np.float32)
+idx, v = separatrix.certified_topk(X, Q, k=4)
+assert idx.shape == (4, 4) and v.status
+for banned in Block.BANNED:
+    assert banned not in sys.modules, banned
+print("clean")
+"""
+
+
 def test_import_costs_nothing_optional():
-    """`import separatrix` must not reach torch, faiss or datasets."""
+    """`import separatrix` and the numpy certification path never reach torch or datasets.
+
+    Run in a subprocess with a meta-path finder that raises on the optional imports.  The
+    in-process version of this test was measured to be vacuous once any other test file
+    imported torch: `sys.modules` is shared, so it passed by accident and then failed for a
+    reason that had nothing to do with the package.
+    """
+    import subprocess
     import sys
 
-    for mod in ("torch", "faiss", "datasets", "sentence_transformers", "scipy"):
-        assert mod not in sys.modules or mod == "scipy", f"{mod} was imported at import time"
-    assert separatrix.gamma(386, "float32") > 0
+    r = subprocess.run([sys.executable, "-c", BLOCKER], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "clean" in r.stdout
 
 
 def test_public_surface_is_small_and_the_decisions_are_lazy():

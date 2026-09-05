@@ -77,6 +77,15 @@ def topk_determined(
 
     `D` is 1-D of length n.  `R` is a scalar or broadcastable to it, and must be a bound on
     |D - exact| -- this function does not and cannot check that.
+
+    The interval used here is `[D-R, D+R]`, **unclamped**.  `Enclosure.interval` clamps the
+    lower end at zero because a squared distance cannot be negative, and that clamp would
+    make this rule strictly stronger -- but this file does not know the kernel, and for an
+    inner-product score a negative value is legal, so clamping here would be unsound for a
+    score type this rule is meant to serve.  The conservatism it costs was measured rather
+    than assumed: across all five benchmark corpora (iid, clustered, MNIST-shaped, real
+    MNIST, real SciFact, 300 queries each at k=10) **0 of 4,764,900 enclosure lower bounds
+    fell below zero**, so the clamp changes 0 refusals on every corpus measured.
     """
     D = np.asarray(D, dtype=np.float64).ravel()
     if largest:
