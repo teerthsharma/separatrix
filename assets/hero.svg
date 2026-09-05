@@ -44,5 +44,5 @@
 <line x1="760.0" y1="780.0" x2="1536.0" y2="780.0" stroke="#22303B" stroke-width="2"/>
 <text x="760.0" y="820.0" fill="#8FA3B0" font-size="26" font-weight="400">1,000 SIFT1M queries, sorted by margin</text>
 <line x1="64.0" y1="856.0" x2="1536.0" y2="856.0" stroke="#22303B" stroke-width="1" opacity="0.6"/>
-<text x="64.0" y="886.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">gram kernel, cheap bound, chunk 20, 76 s -- the truth was computed outside this repository</text>
+<text x="64.0" y="886.0" fill="#8FA3B0" font-size="26" font-weight="400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">gram kernel, cheap bound, chunk 20, 145 s -- the truth was computed outside this repository</text>
 </svg>
