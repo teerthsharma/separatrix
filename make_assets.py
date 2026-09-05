@@ -219,8 +219,10 @@ def draw_hero(d) -> str:
     px0, px1, py0, py1 = 760, 1536, 268, 780
     top = math.log10(max(gap) + 1.0) * 1.10
 
+    floor = py1 - 16  # a zero-gap row draws above the axis rule, not straddling it
+
     def Y(v):
-        return py1 - (math.log10(v + 1.0) / top) * (py1 - py0)
+        return floor - (math.log10(v + 1.0) / top) * (floor - py0)
 
     def X(r):
         return px0 + (r / (m - 1)) * (px1 - px0)
@@ -250,13 +252,22 @@ def draw_hero(d) -> str:
                     3.5, GREEN, 0.85))
     b.append(series([(X(r), Y(gap[i])) for r, i in enumerate(order) if gap[i] <= wid[i]],
                     5, AMBER))
-    for i in s["disputed_rows"]:
-        b.append(dot(X(rank_of[i]), Y(gap[i]), 12, "none", stroke=BLUE, sw=3))
+    # all 9 disputed rows are among the very smallest margins, so 9 rings land inside 11
+    # units and draw as one smudge.  One ring round the cluster, and the count in the key.
+    dx = [X(rank_of[i]) for i in s["disputed_rows"]]
+    dy = [Y(gap[i]) for i in s["disputed_rows"]]
+    b.append(dot((min(dx) + max(dx)) / 2, (min(dy) + max(dy)) / 2,
+                 max(max(dx) - min(dx), max(dy) - min(dy)) / 2 + 16,
+                 "none", stroke=BLUE, sw=3))
 
     b += ticks
-    b += [M(px0 + 46, py1 - 18, f"{s['refused']} refused", AMBER, 30, "700"),
-          dot(px0 + 262, py1 - 26, 10, "none", stroke=BLUE, sw=3),
-          T(px0 + 282, py1 - 18, f"{s['disputed']} where the published answer differs",
+    # the key lives inside the amber refusal band, on its empty right half: the only large
+    # clear area in the plot, and the band is what both of its entries are about
+    ky = yb + (py1 - yb) / 2 - 22
+    b += [dot(px1 - 578, ky - 8, 8, AMBER),
+          M(px1 - 560, ky, f"{s['refused']} refused", AMBER, 28, "700"),
+          dot(px1 - 578, ky + 36, 10, "none", stroke=BLUE, sw=3),
+          T(px1 - 558, ky + 44, f"{s['disputed']} where the published answer differs",
             BLUE, 26),
           M(px1 - 20, 386, f"{s['certified']} certified", GREEN, 30, "700", anchor="end"),
           line(px0, py1, px1, py1, RULE, 2),

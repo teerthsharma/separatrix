@@ -4,16 +4,16 @@
 
 <p align="center"><sub>Invented by <b>Teerth Sharma</b> · <a href="mailto:teerths57@gmail.com">teerths57@gmail.com</a> · <a href="https://github.com/teerthsharma/separatrix">github.com/teerthsharma/separatrix</a></sub></p>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/hero.svg" width="80%" alt="SIFT1M, 1,000 queries against 1,000,000 vectors: 948 of 948 certified top-10 sets are identical to the list the ANN_SIFT1M authors published, 52 queries were refused, and all 9 rows where the published answer differs had been refused first">
-</p>
-
 ```bash
 pip install separatrix
 separatrix demo --frame preview   # the 3 rankings rounding chose, named from one run
 ```
 
 **0 of 1,116** certified sets moved across nine engines; all **8** that moved were refused. [→ §2](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#2-the-headline)
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/teerthsharma/separatrix/main/assets/hero.svg" width="80%" alt="SIFT1M, 1,000 queries against 1,000,000 vectors: 948 of 948 certified top-10 sets are identical to the list the ANN_SIFT1M authors published, 52 queries were refused, and all 9 rows where the published answer differs had been refused first">
+</p>
 
 <p align="center">
   <a href="https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md"><img src="https://img.shields.io/badge/tests-212%20passed-2FD98A?style=flat-square&labelColor=121B23" alt="212 tests passed"></a>
