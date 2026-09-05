@@ -193,6 +193,12 @@ def test_a_usage_error_is_exit_three_and_never_a_verdict(tmp_path, npys):
     np.save(ints, np.zeros((4, 3), dtype=np.int32))
     both = tmp_path / "two.npz"
     np.savez(both, a=np.zeros((4, 3)), b=np.zeros((4, 3)))
+    empty = tmp_path / "empty.npy"
+    empty.write_bytes(b"")
+    corrupt_npz = tmp_path / "corrupt.npz"
+    corrupt_npz.write_bytes(b"PK\x03\x04 zip magic, everything after it is garbage")
+    a_directory = tmp_path / "a_directory.npy"
+    a_directory.mkdir()
 
     for argv in (
         [],
@@ -200,7 +206,11 @@ def test_a_usage_error_is_exit_three_and_never_a_verdict(tmp_path, npys):
         ["check", "--corpus", str(ints), "--queries", npys[1]],
         ["check", "--corpus", str(both), "--queries", npys[1]],
         ["check", "--corpus", str(tmp_path / "nope.npy"), "--queries", npys[1]],
+        ["check", "--corpus", str(tmp_path / "nested" / "nope.npy"), "--queries", npys[1]],
         ["check", "--corpus", npys[0], "--queries", npys[1], "--max-refused", "1.5"],
+        ["check", "--corpus", str(empty), "--queries", npys[1]],
+        ["check", "--corpus", str(corrupt_npz), "--queries", npys[1]],
+        ["check", "--corpus", str(a_directory), "--queries", npys[1]],
     ):
         code, text = run(argv)
         assert code == V.EXIT_USAGE, argv
@@ -385,3 +395,30 @@ def test_cli_exit_codes_and_json(tmp_path):
     code, text = run(argv[:-1] + ["0"])
     assert code == V.EXIT_USAGE
     assert not any(r in text for r in V.REASONS)
+
+
+def test_cli_reads_unicode_and_space_bearing_paths(tmp_path):
+    """Windows and POSIX both accept these bytes in a filename; `check` must too."""
+    pytest.importorskip("separatrix.api")
+    X, Q = cli.near_duplicate_corpus(n=60, d=8, m=5)
+    xp = tmp_path / "corpus café ☃.npy"
+    qp = tmp_path / "sub dir with spaces" / "queries.npy"
+    qp.parent.mkdir()
+    np.save(xp, X)
+    np.save(qp, Q)
+    code, text = run(["check", "--corpus", str(xp), "--queries", str(qp), "--k", "5"])
+    assert code in set(V.EXIT.values()), text
+    assert any(s in text for s in V.STATUSES)
+
+
+def test_cli_names_a_zero_row_corpus_instead_of_crashing(tmp_path):
+    """A `.npy` with n=0 is `size == 0`; `as_points` already refuses it -- this is the
+    path a stranger takes through the CLI door rather than through `as_points` directly."""
+    pytest.importorskip("separatrix.api")
+    zero = tmp_path / "zero.npy"
+    np.save(zero, np.zeros((0, 8), dtype=np.float32))
+    q = tmp_path / "q.npy"
+    np.save(q, np.zeros((3, 8), dtype=np.float32))
+    code, text = run(["check", "--corpus", str(zero), "--queries", str(q)])
+    assert code == V.EXIT_USAGE, text
+    assert "empty" in text

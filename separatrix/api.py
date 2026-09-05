@@ -157,8 +157,15 @@ def certified_topk(
     k = int(k)
     if k <= 0 or k >= n:
         raise ValueError(f"k must satisfy 0 < k < n = {n}, got {k}")
-    if chunk is not None and chunk <= 0:
-        raise ValueError(f"chunk must be positive, got {chunk}")
+    if chunk is not None:
+        if isinstance(chunk, bool) or not isinstance(chunk, (int, np.integer)):
+            # An un-typed chunk reaches `range(0, m, chunk)` several frames down and
+            # raises the bare `TypeError: 'float' object cannot be interpreted as an
+            # integer`, naming neither the argument nor the caller's mistake.
+            raise TypeError(f"chunk must be an int, got {type(chunk).__name__}")
+        chunk = int(chunk)
+        if chunk <= 0:
+            raise ValueError(f"chunk must be positive, got {chunk}")
 
     work = None
     status_ok = CERTIFIED
@@ -348,7 +355,7 @@ def certified_threshold(D, R, t, *, units: str = "score") -> np.ndarray:
     if units != "score":
         raise ValueError(f"units must be 'score' or 'distance', got {units!r}")
     D = np.asarray(D, dtype=np.float64)
-    R = np.broadcast_to(np.asarray(R, dtype=np.float64), D.shape)
+    R = decide.broadcast_radius(D, R)
     if np.any(R < 0):
         raise ValueError("R is a radius and cannot be negative")
     t = float(t)

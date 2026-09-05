@@ -53,7 +53,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .decide import topk_set
+from .decide import broadcast_radius, topk_set
 from .verdict import EXACT_TIE, Frontier
 
 # float32's smallest subnormal is 2**-149; float64's is 2**-1074.
@@ -206,8 +206,17 @@ def escalate_row(
     integers and outward float images is the proof, and a badly ordered T can only fail to
     close, never certify wrongly.
     """
+    if isinstance(max_escalations, bool) or not isinstance(max_escalations, (int, np.integer)):
+        # Un-typed, this reaches `range(max_escalations + 2)` below and raises the bare
+        # `TypeError: 'float' object cannot be interpreted as an integer`, naming neither
+        # the argument nor the caller's mistake -- the same class of bug `chunk` had in
+        # `certified_topk`, fixed there the same way.
+        raise TypeError(f"max_escalations must be an int, got {type(max_escalations).__name__}")
+    max_escalations = int(max_escalations)
+    if max_escalations < 0:
+        raise ValueError(f"max_escalations must be non-negative, got {max_escalations}")
     D = np.asarray(D, dtype=np.float64).ravel()
-    R = np.broadcast_to(np.asarray(R, dtype=np.float64), D.shape).astype(np.float64)
+    R = broadcast_radius(D, R).astype(np.float64)
     if bits is None:
         bits = bits_for(np.asarray(X).dtype)
     sgn = -1.0 if largest else 1.0

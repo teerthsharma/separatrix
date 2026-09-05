@@ -50,6 +50,26 @@ import numpy as np
 from .verdict import Frontier
 
 
+def broadcast_radius(D: np.ndarray, R) -> np.ndarray:
+    """``R`` as a float64 array broadcastable to ``D``'s shape, or a typed ``ValueError``.
+
+    Every public entry point that takes a bring-your-own ``(D, R)`` enclosure --
+    `topk_determined`, `certified_threshold`, `escalate_row` -- ends up calling
+    ``np.broadcast_to`` on ``R``; a shape mismatch there is a bare numpy `ValueError`
+    ("operands could not be broadcast together...") with neither array's shape named
+    against the other, escaping from inside this call rather than naming the caller's
+    mistake.  One guard, called from all three, so the message is the same everywhere
+    and there is exactly one place to name both shapes.
+    """
+    R = np.asarray(R, dtype=np.float64)
+    try:
+        return np.broadcast_to(R, D.shape)
+    except ValueError as e:
+        raise ValueError(
+            f"R has shape {R.shape} and cannot be broadcast against D's shape {D.shape}: {e}"
+        ) from e
+
+
 def topk_set(D: np.ndarray, k: int, largest: bool = False) -> np.ndarray:
     """The k smallest (or largest) indices of D, ascending in score.  Not a certificate."""
     n = D.shape[-1]
@@ -106,7 +126,7 @@ def topk_determined(
             width=f.width,
         )
 
-    R = np.broadcast_to(np.asarray(R, dtype=np.float64), D.shape)
+    R = broadcast_radius(D, R)
     T = topk_set(D, k, largest=False)
     mask = np.zeros(D.shape, dtype=bool)
     mask[T] = True
@@ -158,7 +178,7 @@ def naive_boundary_pair(
     rather than against a re-typed formula.  Never called by anything that certifies.
     """
     D = np.asarray(D, dtype=np.float64).ravel()
-    R = np.broadcast_to(np.asarray(R, dtype=np.float64), D.shape)
+    R = broadcast_radius(D, R)
     order = np.argsort(-D if largest else D, kind="stable")
     a, b = int(order[k - 1]), int(order[k])
     if largest:
@@ -174,7 +194,7 @@ def worst_corner(D: np.ndarray, R: np.ndarray | float, T: np.ndarray) -> np.ndar
     cannot.
     """
     D = np.asarray(D, dtype=np.float64).ravel()
-    R = np.broadcast_to(np.asarray(R, dtype=np.float64), D.shape)
+    R = broadcast_radius(D, R)
     v = D - R
     v = v.copy()
     v[np.asarray(T, dtype=np.intp)] = (D + R)[np.asarray(T, dtype=np.intp)]

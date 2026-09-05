@@ -295,6 +295,72 @@ def test_load_reads_npy_and_npz_and_will_not_guess(tmp_path):
         load(tmp_path / "scores.npy")
 
 
+def test_load_names_a_corrupt_file_instead_of_crashing(tmp_path):
+    """A stranger's file, not a stranger's code: every one of these is a `ValueError`
+    naming the path, never the bare exception type `numpy.load` happens to raise inside.
+
+    Reproduced by construction, not guessed: a zero-byte file raises `EOFError` (numpy's
+    own message for "no data left"), garbage bytes with a `.npz` extension raise
+    `zipfile.BadZipFile` ("not a zip file"), and a zip whose member CRC-32 fails --
+    checked lazily, when the array is pulled out of the archive, not when the file is
+    opened -- raises `zipfile.BadZipFile` again from a different call site.
+    """
+    empty = tmp_path / "empty.npy"
+    empty.write_bytes(b"")
+    with pytest.raises(ValueError) as e:
+        load(empty)
+    assert "empty.npy" in str(e.value)
+
+    not_a_zip = tmp_path / "garbage.npz"
+    not_a_zip.write_bytes(b"PK\x03\x04 zip magic, but everything after it is garbage")
+    with pytest.raises(ValueError) as e:
+        load(not_a_zip)
+    assert "garbage.npz" in str(e.value)
+
+    import zipfile
+
+    bad_crc = tmp_path / "bad_crc.npz"
+    import io as _io
+
+    import numpy.lib.format as fmt
+
+    buf = _io.BytesIO()
+    fmt.write_array(buf, np.zeros((20, 20), dtype=np.float64))
+    payload = buf.getvalue()
+    with zipfile.ZipFile(bad_crc, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("arr_0.npy", payload)
+    raw = bytearray(bad_crc.read_bytes())
+    mid = len(raw) // 2
+    for i in range(mid, mid + 20):
+        raw[i] ^= 0xFF
+    bad_crc.write_bytes(bytes(raw))
+    with pytest.raises(ValueError) as e:
+        load(bad_crc)
+    assert "bad_crc.npz" in str(e.value)
+
+
+def test_load_handles_unicode_and_spaces_in_the_path(tmp_path):
+    """Windows and POSIX both accept these bytes in a filename; the loader must too."""
+    A = np.arange(12, dtype=np.float32).reshape(3, 4)
+    p = tmp_path / "café corpus ☃.npy"
+    np.save(p, A)
+    assert np.array_equal(load(p), A)
+    assert np.array_equal(load(str(p)), A)
+
+
+def test_exact_lattice_refuses_an_oversized_prescribed_distance_instead_of_hanging():
+    """`_four_squares`'s search cost is not bounded by sqrt(S) in the worst case (see
+    `MAX_LATTICE_S`'s docstring); a caller-supplied `delta` large enough to reach that
+    regime must be a fast `ValueError`, not a multi-minute search.
+    """
+    with pytest.raises(ValueError) as e:
+        exact_lattice(delta=10**15, dtype=np.float64)
+    assert "MAX_LATTICE_S" in str(e.value)
+    # and the documented schedule -- the only range anything in this repository uses --
+    # is nowhere near the cap
+    assert max(DELTA_SCHEDULE) < 2**30
+
+
 # -- C3: the download, skipped when the machine cannot draw it ------------------------------------
 
 

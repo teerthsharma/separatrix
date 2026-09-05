@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from separatrix.decide import (
+    broadcast_radius,
     naive_boundary_pair,
     rows_determined,
     topk_determined,
@@ -182,3 +183,23 @@ def test_scalar_radius_broadcasts():
     D = np.array([0.0, 1.0, 2.0])
     assert topk_determined(D, 0.1, 1) is None
     assert topk_determined(D, np.float64(0.1), 1) is None
+
+
+def test_a_shape_mismatched_radius_is_this_librarys_own_error_not_a_bare_numpy_one():
+    """A bring-your-own ``(D, R)`` caller can pass a shape that does not fit ``D``.  The
+    message must name both shapes, never surface as the bare `ValueError` numpy's own
+    `broadcast_to` raises three frames down with neither shape attributed to the caller.
+    """
+    D = np.array([0.0, 1.0, 2.0])
+    with pytest.raises(ValueError) as e:
+        topk_determined(D, np.array([0.1, 0.2]), 1)
+    msg = str(e.value)
+    assert "(2,)" in msg and "(3,)" in msg
+
+    with pytest.raises(ValueError) as e:
+        broadcast_radius(D, np.array([0.1, 0.2]))
+    assert "(2,)" in str(e.value) and "(3,)" in str(e.value)
+
+    # the passing case still returns a genuine broadcast view
+    got = broadcast_radius(D, 0.5)
+    assert got.shape == D.shape and (got == 0.5).all()

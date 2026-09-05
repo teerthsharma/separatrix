@@ -42,6 +42,19 @@ MNIST_URL = "https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.n
 # must return NOT CERTIFIED (EXACT_TIE) rather than a certificate.
 DELTA_SCHEDULE = (0, 1, 2) + tuple(2**j for j in range(2, 21))
 
+# `_four_squares` is Lagrange's theorem by exhaustive search, not a closed form: its cost
+# is dominated by how many candidate remainders fail `_two_squares` before one succeeds,
+# and that count is NOT bounded by sqrt(S) in the worst case -- measured empirically here,
+# random S near 2**44 already cost several seconds and the growth compounds from there.
+# `delta`, `base`, `spread`, `n` and `k` all feed the prescribed distance `S` that
+# `exact_lattice` hands to it, so any of them, not just `delta`, can drive S past the
+# point where the search is fast.  The documented schedule never exceeds 2**20; this cap
+# is checked BEFORE the O(n) point-construction loop runs, so an oversized S is a
+# ValueError in microseconds rather than a multi-minute hang. `MAX_LATTICE_S = 2**30` cost
+# at most ~0.3s over 2000 random draws in [2**28, 2**30) on this machine -- refuse, don't
+# hang, with margin to spare above the 2**20 the schedule actually uses.
+MAX_LATTICE_S = 1 << 30
+
 
 class CorpusUnavailable(RuntimeError):
     """This machine cannot draw this corpus: no cache, no network, or no encoder.
@@ -168,26 +181,44 @@ def load(path, name: str | None = None, key: str | None = None, *,
     `.npz` with one array takes it; with several, `key` names it and the error lists the
     keys rather than guessing.  Guessing which of three arrays in an archive is the corpus
     is exactly the class of silent wrong answer this package exists to attack.
+
+    A corrupt or truncated file is a usage error, not a crash.  Most malformed ``.npy``
+    headers already surface as `ValueError` out of `numpy.load`, but three more exception
+    types were reproduced here on deliberately corrupted files and none of them is a
+    `ValueError` or an `OSError`: a zero-byte file raises the bare `EOFError` numpy uses
+    for "no data left"; a `.npz` whose zip container will not open, or whose CRC-32 fails
+    on a member read (which numpy defers until the array is actually pulled out of the
+    archive), raises `zipfile.BadZipFile`; and a header mangled into unbalanced quotes
+    falls through numpy's own parser into Python's tokenizer, which raises
+    `tokenize.TokenError` (or, for some byte patterns, a bare `SyntaxError`) instead. All
+    four are caught over the whole read, open through member access, and re-raised as one
+    `ValueError` naming the path, rather than reaching a caller as an unhandled traceback.
     """
+    import tokenize
+    import zipfile
+
     p = Path(path)
     label = name or p.name
     if not p.exists():
         raise FileNotFoundError(f"{label}: {p} does not exist")
-    obj = np.load(p, allow_pickle=False)
-    if isinstance(obj, np.ndarray):
-        return as_points(obj, label, allow_int=allow_int)
-    with obj as z:
-        keys = list(z.files)
-        if key is not None:
-            if key not in keys:
-                raise ValueError(f"{label}: {p} has no array {key!r}; it has {keys}")
-            return as_points(z[key], f"{label}[{key}]", allow_int=allow_int)
-        if len(keys) != 1:
-            raise ValueError(
-                f"{label}: {p} holds {len(keys)} arrays {keys}; name one with key= rather "
-                f"than letting the loader guess which is the corpus"
-            )
-        return as_points(z[keys[0]], f"{label}[{keys[0]}]", allow_int=allow_int)
+    try:
+        obj = np.load(p, allow_pickle=False)
+        if isinstance(obj, np.ndarray):
+            return as_points(obj, label, allow_int=allow_int)
+        with obj as z:
+            keys = list(z.files)
+            if key is not None:
+                if key not in keys:
+                    raise ValueError(f"{label}: {p} has no array {key!r}; it has {keys}")
+                return as_points(z[key], f"{label}[{key}]", allow_int=allow_int)
+            if len(keys) != 1:
+                raise ValueError(
+                    f"{label}: {p} holds {len(keys)} arrays {keys}; name one with key= "
+                    f"rather than letting the loader guess which is the corpus"
+                )
+            return as_points(z[keys[0]], f"{label}[{keys[0]}]", allow_int=allow_int)
+    except (EOFError, zipfile.BadZipFile, tokenize.TokenError, SyntaxError) as e:
+        raise ValueError(f"{label}: {p} is not a readable .npy/.npz file: {e}") from e
 
 
 # -- C1: the exact lattice ------------------------------------------------------------------------
@@ -289,6 +320,15 @@ def exact_lattice(
 
     S = [base + i * spread for i in range(k)]
     S += [base + (k - 1) * spread + delta + i * spread for i in range(n - k)]
+
+    worst_S = max(S) if S else 0
+    if worst_S > MAX_LATTICE_S:
+        raise ValueError(
+            f"the prescribed squared distance reaches {worst_S}, above "
+            f"MAX_LATTICE_S={MAX_LATTICE_S}; _four_squares's search cost is not bounded "
+            f"by sqrt(S) in the worst case, so this would refuse slowly instead of "
+            f"quickly. Lower delta (the schedule stops at 2**20), base, spread, n or k"
+        )
 
     X = np.empty((n, d), dtype=np.int64)
     order = rng.permutation(n)  # so the answer is not the first k indices

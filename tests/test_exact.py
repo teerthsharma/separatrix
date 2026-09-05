@@ -222,6 +222,32 @@ def test_escalation_budget_is_a_typed_outcome_not_a_hang():
     assert e.n_escalated <= 4
 
 
+def test_max_escalations_is_this_librarys_own_typed_error():
+    """A non-int reaches `range(max_escalations + 2)` unchecked: the bare
+    `TypeError: 'float' object cannot be interpreted as an integer` names neither the
+    argument nor the caller's mistake. Checked at the door instead."""
+    X = np.zeros((4, 3), dtype=np.float32)
+    q = np.zeros(3, dtype=np.float32)
+    D = np.array([1.0, 2.0, 3.0, 4.0])
+    R = np.array([0.1, 0.1, 0.1, 0.1])
+    with pytest.raises(TypeError, match="max_escalations"):
+        escalate_row(q, X, D, R, 1, max_escalations=2.5)
+    with pytest.raises(TypeError, match="max_escalations"):
+        escalate_row(q, X, D, R, 1, max_escalations=True)
+    with pytest.raises(ValueError, match="max_escalations"):
+        escalate_row(q, X, D, R, 1, max_escalations=-1)
+
+
+def test_escalate_row_shape_mismatch_names_both_shapes_not_a_bare_numpy_error():
+    X = np.zeros((4, 3), dtype=np.float32)
+    q = np.zeros(3, dtype=np.float32)
+    D = np.array([1.0, 2.0, 3.0, 4.0])
+    with pytest.raises(ValueError) as e:
+        escalate_row(q, X, D, np.array([0.1, 0.2]), 1)
+    msg = str(e.value)
+    assert "(2,)" in msg and "(4,)" in msg
+
+
 def test_escalate_over_rows_matches_the_single_row_call():
     rng = np.random.default_rng(4)
     X = rng.standard_normal((25, 4)).astype(np.float32)

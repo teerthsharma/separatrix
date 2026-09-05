@@ -96,6 +96,13 @@ def test_a_distance_threshold_against_squared_scores_is_a_usage_error():
         certified_threshold([1.0], [-1.0], 2.0)
 
 
+def test_threshold_shape_mismatch_names_both_shapes_not_a_bare_numpy_error():
+    with pytest.raises(ValueError) as e:
+        certified_threshold([1.0, 2.0, 3.0], [0.1, 0.2], 2.0)
+    msg = str(e.value)
+    assert "(2,)" in msg and "(3,)" in msg
+
+
 # --------------------------------------------------------------------------------------
 # usage errors are exceptions, exit class 3, and are not in the refusal catalogue
 # --------------------------------------------------------------------------------------
@@ -115,6 +122,27 @@ def test_usage_errors_are_exceptions():
         certified_topk(X, Q, k=True)
     with pytest.raises(ValueError):
         certified_topk(X, Q, k=5, chunk=0)
+
+
+def test_a_non_integer_chunk_is_this_librarys_own_typed_error():
+    """`chunk` used to reach `range(0, m, chunk)` unchecked: a float there raises the bare
+    `TypeError: 'float' object cannot be interpreted as an integer`, naming neither the
+    argument nor the caller's mistake. Checked at the door instead, like `k` already is.
+    """
+    X, Q = near_duplicate_corpus(n=60, d=8, m=3)
+    with pytest.raises(TypeError, match="chunk"):
+        certified_topk(X, Q, k=5, chunk=1.5)
+    with pytest.raises(TypeError, match="chunk"):
+        certified_topk(X, Q, k=5, chunk=True)
+    # a numpy integer is still an int
+    idx, v = certified_topk(X, Q, k=5, chunk=np.int64(2))
+    assert idx.shape == (3, 5)
+
+
+def test_a_non_integer_max_escalations_is_this_librarys_own_typed_error():
+    X, Q = near_duplicate_corpus(n=200, d=16, m=8, dups=60, jitter=1e-8)
+    with pytest.raises(TypeError, match="max_escalations"):
+        certified_topk(X, Q, k=5, escalate=True, max_escalations=2.5)
 
 
 def test_a_usage_error_carries_no_refusal_code():
@@ -193,6 +221,23 @@ def test_every_frontier_names_its_own_row_after_escalation():
     assert v.n_refused >= 2, "this corpus is seeded to leave two rows undecided"
     assert len({f.row for f in v.frontiers}) == v.n_refused
     assert sorted(f.row for f in v.frontiers) == sorted({f.row for f in v.frontiers})
+
+
+def test_escalation_budget_is_reachable_through_the_public_api():
+    """Every catalogue reason must be reachable from where a stranger would hit it.
+
+    `exact.escalate_row` returning ``reason="ESCALATION_BUDGET"`` is tested directly in
+    `test_exact.py`; this is the api.py branch that turns that into the Verdict a caller
+    of `certified_topk` actually sees -- ``budgeted`` takes priority over ``tied`` in
+    `certified_topk`'s reason table, so the corpus is built dense enough that escalation
+    exhausts its budget on real rows rather than closing or tying.
+    """
+    X, Q = near_duplicate_corpus(n=400, d=16, m=40, dups=150, jitter=1e-8)
+    _, v = certified_topk(X, Q, k=5, escalate=True, max_escalations=1)
+    assert v.status == V.REFUSED and v.reason == V.ESCALATION_BUDGET
+    assert v.exit_code == 2
+    assert "max_escalations=1" in v.detail
+    assert v.next_action == V.NEXT_ACTION[V.ESCALATION_BUDGET]
 
 
 def test_chunk_is_a_tenth_engine():
