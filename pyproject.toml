@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# `separatrix` on PyPI returned 404 on 2026-09-05, so the distribution, the import
+# package and the console script are all the same word. No `kit` suffix is needed here.
+name = "separatrix"
+version = "0.1.0"
+description = "Certify that your top-k, argmin or threshold was determined by your data and not by the rounding of the kernel it ran on, or refuse and name the boundary."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Teerth Sharma", email = "teerths57@gmail.com" }]
+keywords = [
+    "floating-point",
+    "rounding-error",
+    "interval-arithmetic",
+    "certificate",
+    "abstention",
+    "determinism",
+    "top-k",
+    "nearest-neighbors",
+]
+# Measured on CPython 3.11.9 only. requires-python is the support claim;
+# no per-minor classifier is listed for a version that was never run.
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4"]
+torch = ["torch>=2.0"]
+bench = ["datasets>=2.14", "sentence-transformers>=2.2"]
+
+[project.urls]
+Homepage = "https://github.com/teerthsharma/separatrix"
+Repository = "https://github.com/teerthsharma/separatrix"
+Issues = "https://github.com/teerthsharma/separatrix/issues"
+Results = "https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md"
+
+[project.scripts]
+separatrix = "separatrix.cli:main"
+
+[tool.setuptools]
+# The package ships flat at the repo root. No src/ wrapper.
+packages = ["separatrix"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
