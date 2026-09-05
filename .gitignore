@@ -9,3 +9,6 @@ __pycache__/
 results.json
 build/
 dist/
+
+# X.npy and Q.npy, written into the repo root by the RESULTS.md 3.1 recipe
+*.npy
