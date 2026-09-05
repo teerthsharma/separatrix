@@ -22,6 +22,7 @@ from separatrix.corpus import (
     exact_lattice,
     load,
     mnist,
+    sift1m,
 )
 from separatrix.decide import topk_determined, topk_set
 from separatrix.enclose import enclose_scores
@@ -308,3 +309,32 @@ def test_mnist_when_cached():
     n2 = (c.X.astype(np.float64) ** 2).sum(1)
     assert n2.max() > 1e6
     assert mnist(n=200, m=8, dtype=np.float16).headroom() > float(np.finfo(np.float16).max)
+
+
+def test_sift1m_when_cached():
+    """The only corpus whose `truth` was computed outside this repository.
+
+    Skipped when the 516 MB base is not cached. The two assertions that matter are the
+    alignment ones: the published ground truth is indexed by position in the query file, so
+    a loader that sampled or permuted the queries would break the only external control in
+    the repository while still returning a plausible corpus.
+    """
+    import os
+
+    if os.environ.get("SEPARATRIX_NO_DOWNLOAD"):
+        pytest.skip("SEPARATRIX_NO_DOWNLOAD is set")
+    try:
+        c = sift1m(m=4, k=10)
+    except CorpusUnavailable as e:
+        pytest.skip(f"sift1m unavailable: {e}")
+    assert c.X.shape == (1_000_000, 128) and c.Q.shape == (4, 128)
+    assert c.X.dtype == np.float32 and c.truth.shape == (4, 10)
+    head = c.X[:1000].astype(np.float64)
+    assert np.array_equal(head, np.floor(head)), "SIFT components are integers 0..255"
+    # the published neighbour of query 0 is its nearest in exact integer arithmetic
+    q = c.Q[0].astype(np.int64)
+    d0 = ((c.X[c.truth[0, 0]].astype(np.int64) - q) ** 2).sum()
+    for j in c.truth[0, 1:]:
+        assert d0 <= ((c.X[j].astype(np.int64) - q) ** 2).sum()
+    # float16 fails the range precondition on these bytes, as it does on MNIST
+    assert sift1m(m=4, dtype=np.float16).headroom() > float(np.finfo(np.float16).max)

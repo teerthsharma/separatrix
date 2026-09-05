@@ -257,9 +257,22 @@ def check_canary(work_dtype, backend: str = "numpy") -> str:
 
 
 def _norms64(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """(||a||^2, ||a||) in float64, whatever A is stored as.  One O(nd) pass."""
-    a64 = A.astype(np.float64, copy=False)
-    n2 = np.einsum("ij,ij->i", a64, a64)
+    """(||a||^2, ||a||) in float64, whatever A is stored as.  One O(nd) pass, blocked.
+
+    The blocking is memory, not speed.  ``A.astype(np.float64)`` on the whole array is a
+    second copy at 8 bytes an entry -- 1.0 GB for SIFT1M's 1,000,000 x 128 float32 corpus,
+    on top of the 512 MB the corpus already costs -- and it is materialised before the
+    scores are, so the peak lands where the caller has least room.  Each row's reduction
+    is over its own 128 entries either way, so the values are identical to the unblocked
+    pass; ``test_norms64_blocking_is_exact`` asserts bitwise equality at several block
+    sizes.
+    """
+    n, d = A.shape
+    step = max(1, int(4e6) // max(1, d))  # ~32 MB of float64 per block
+    n2 = np.empty(n, dtype=np.float64)
+    for i in range(0, n, step):
+        b = A[i : i + step].astype(np.float64, copy=False)
+        n2[i : i + step] = np.einsum("ij,ij->i", b, b)
     return n2, np.sqrt(n2)
 
 

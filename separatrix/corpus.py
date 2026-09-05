@@ -521,8 +521,13 @@ def _cached(filename: str, url: str) -> Path:
 
     tmp = p.with_suffix(p.suffix + ".part")
     try:
+        # copyfileobj, not r.read(): SIFT1M's base file is 516 MB and reading it whole
+        # into memory before writing it is 516 MB the caller does not have on a machine
+        # with 2.9 GB free -- which is the machine the corpus is for.
+        import shutil
+
         with urllib.request.urlopen(url, timeout=60) as r, open(tmp, "wb") as f:  # noqa: S310
-            f.write(r.read())
+            shutil.copyfileobj(r, f, 1 << 20)
     except (urllib.error.URLError, OSError, TimeoutError) as e:
         tmp.unlink(missing_ok=True)
         raise CorpusUnavailable(f"could not download {url}: {e}") from e
@@ -614,6 +619,67 @@ def scifact(
         k=k,
         note="all-MiniLM-L6-v2, normalised rows at d=384; the cheap per-pair radius is "
         "constant here by construction, so only bound='tight' carries per-pair information",
+    )
+
+
+SIFT1M_REPO = "https://huggingface.co/datasets/qbo-odp/sift1m/resolve/main/"
+
+
+def _xvecs(path: Path, dtype, count: int | None = None) -> np.ndarray:
+    """One `.fvecs`/`.ivecs` file as (n, d).  Each record is int32 d, then d values."""
+    a = np.memmap(path, dtype=np.int32, mode="r")
+    if a.size == 0:
+        raise CorpusUnavailable(f"{path} is empty")
+    d = int(a[0])
+    if d <= 0 or a.size % (d + 1):
+        raise CorpusUnavailable(f"{path} is not xvecs: leading dim {d}, {a.size} int32s")
+    a = a.reshape(-1, d + 1)
+    if count is not None:
+        a = a[:count]
+    return np.ascontiguousarray(a[:, 1:]).view(np.dtype(dtype))
+
+
+def sift1m(*, m: int = 100, k: int = 10, dtype=np.float32) -> Corpus:
+    """SIFT1M: 1,000,000 x 128 real image descriptors, with the published ground truth.
+
+    Downloaded from `qbo-odp/sift1m` on the Hugging Face hub (apache-2.0), which mirrors
+    the INRIA TEXMEX ANN_SIFT1M release: 516 MB of base vectors, 5 MB of queries and the
+    authors' exact top-100 neighbour list, cached under `.donotcommit/`.  `truth` is the
+    first `k` columns of that list -- the only corpus here whose answer comes from a third
+    party rather than from an oracle in this repository.
+
+    Three properties make it the real-data counterpart of the exact lattice (C1):
+
+      * the descriptors are integers 0..255 stored as float32, and every Gram intermediate
+        is an integer below 2^24, so the float32 score is EXACTLY the integer squared
+        distance -- measured, 0 of 20,000,000 scores differ (RESULTS 10.2).  Every refusal
+        on this corpus is therefore pessimism, and its flip count is 0 by arithmetic.
+      * ||x||^2 has median 2.59e5 against float16's 6.55e4 max, so the float16 path is
+        RANGE_UNSAFE on real bytes rather than on a generated corpus.
+      * the base is 1M rows: the (m, n) float64 score array is 8 MB per query row, which is
+        what `chunk=` exists for.
+
+    `m` queries are taken in file order, not sampled: the published ground truth is
+    indexed by position, so a permutation would silently break the only external control.
+    """
+    dt = np.dtype(dtype)
+    base = _xvecs(_cached("sift_base.fvecs", SIFT1M_REPO + "sift_base.fvecs"), np.float32)
+    q = _xvecs(_cached("sift_query.fvecs", SIFT1M_REPO + "sift_query.fvecs"), np.float32,
+               count=m)
+    gt = _xvecs(_cached("sift_groundtruth.ivecs", SIFT1M_REPO + "sift_groundtruth.ivecs"),
+                np.int32, count=m)
+    if k > gt.shape[1]:
+        raise ValueError(f"the published ground truth has {gt.shape[1]} columns, k={k}")
+    X = base.astype(dt, copy=False)
+    Q = q.astype(dt, copy=False)
+    return Corpus(
+        name=f"sift1m(n={len(X)},m={len(Q)},{dt.name})",
+        X=X,
+        Q=Q,
+        k=k,
+        truth=np.ascontiguousarray(gt[:, :k]).astype(np.int64),
+        note="INRIA TEXMEX SIFT descriptors, integer-valued 0..255 at d=128; truth is the "
+        "authors' published top-100, not an oracle in this repository",
     )
 
 

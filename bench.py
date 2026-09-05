@@ -41,6 +41,7 @@ import time
 import numpy as np
 
 from separatrix import corpus as C
+from separatrix.api import certified_topk
 from separatrix.cli import permuted_evaluation, rules
 from separatrix.decide import naive_boundary_pair, rows_determined, topk_set
 from separatrix.enclose import direct_scores, enclose_scores, gram_scores
@@ -536,6 +537,257 @@ def real_corpora(k):
     return got, missing
 
 
+# --------------------------------------------------------------------------------------
+# the real-data arm: SIFT1M, 1,000,000 x 128 downloaded descriptors, published truth
+# --------------------------------------------------------------------------------------
+
+
+def _peak_mb():
+    """Peak working set of this process, in MB.  None where psapi is not there."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _MC(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                        ("PeakWorkingSetSize", ctypes.c_size_t),
+                        ("WorkingSetSize", ctypes.c_size_t),
+                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                        ("PagefileUsage", ctypes.c_size_t),
+                        ("PeakPagefileUsage", ctypes.c_size_t)]
+
+        c = _MC()
+        c.cb = ctypes.sizeof(_MC)
+        # argtypes, or the 64-bit pseudo-handle is truncated to int32 and the call
+        # returns 0 with a peak of 0.0 -- which reads as "no measurement" rather than
+        # as "wrong measurement", but is a silently missing row either way.
+        fn = ctypes.windll.kernel32.K32GetProcessMemoryInfo
+        fn.argtypes = [wintypes.HANDLE, ctypes.POINTER(_MC), wintypes.DWORD]
+        fn.restype = wintypes.BOOL
+        ok = fn(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(c), c.cb)
+        return float(c.PeakWorkingSetSize) / 1e6 if ok else None
+    except Exception:  # pragma: no cover -- not Windows, or psapi refused
+        return None
+
+
+def _gt_agreement(idx, truth, rows=None):
+    rows = range(len(idx)) if rows is None else rows
+    return sum(set(idx[i].tolist()) == set(truth[i].tolist()) for i in rows)
+
+
+def sift_scale(X, Q, truth, k, ns, chunk):
+    """Refused count against corpus size, on the SAME queries and the same k.
+
+    The prediction on record before this ran: the refused fraction grows with n, because a
+    fixed-width enclosure has more chances to straddle the rank-k boundary as the corpus
+    fills in around it.  It is a prediction about the corpus, not about the bound, and it
+    prints whichever way it lands.
+    """
+    out = []
+    for n in ns:
+        t = time.perf_counter()
+        idx, v = certified_topk(X[:n], Q, k=k, chunk=chunk)
+        dt = time.perf_counter() - t
+        row = {"n": int(n), "refused": int(v.n_refused), "m": int(v.n_queries),
+               "reason": v.reason, "seconds": dt}
+        if n == len(X):  # the published truth is indexed against the full base only
+            refused = {f.row for f in v.frontiers}
+            certified = [i for i in range(len(idx)) if i not in refused]
+            row["gt_all"] = _gt_agreement(idx, truth)
+            row["gt_certified"] = _gt_agreement(idx, truth, certified)
+            row["n_certified"] = len(certified)
+        out.append(row)
+    return out
+
+
+def sift_integers(X, Q, block=50000):
+    """The control that makes every SIFT refusal pessimism: float32 == exact integer.
+
+    The descriptors are integers 0..255, so every Gram intermediate is an integer below
+    2**24 and float32 carries it exactly.  Scored against int64 arithmetic, not against
+    another float path.
+    """
+    Qi = Q.astype(np.int64)
+    qn2 = (Qi * Qi).sum(1)[:, None]
+    bad = tot = 0
+    worst = 0.0
+    for i0 in range(0, len(X), block):
+        xb = X[i0 : i0 + block]
+        Df = gram_scores(xb, Q, np.float32)
+        xi = xb.astype(np.int64)
+        De = (xi * xi).sum(1)[None, :] + qn2 - 2 * (Qi @ xi.T)
+        diff = np.abs(Df - De.astype(np.float64))
+        bad += int((diff != 0).sum())
+        tot += int(diff.size)
+        worst = max(worst, float(diff.max()))
+    return {"queries": int(len(Q)), "scores": tot, "differing": bad, "max_abs": worst}
+
+
+def sift_arm(m=1000, k=10, chunk=100, scale_m=100, exact_queries=20):
+    """Every SIFT1M number in RESULTS section 10, from one download."""
+    res = {"m": int(m), "k": int(k), "chunk": int(chunk)}
+    c = C.sift1m(m=max(m, scale_m), k=k)
+    res["name"] = c.name
+    res["shape"] = [int(c.X.shape[0]), int(c.X.shape[1])]
+    head = c.X[:100000].astype(np.float64)
+    xn2 = np.einsum("ij,ij->i", head, head)
+    res["norm2_median"] = float(np.median(xn2))
+    res["norm2_max"] = float(xn2.max())
+    res["integral"] = bool(np.all(head == np.floor(head)))
+    del head
+
+    res["scale"] = sift_scale(c.X, c.Q[:scale_m], c.truth[:scale_m], k,
+                              (10_000, 100_000, len(c.X)), chunk)
+
+    # GRAM_CANCELLATION's next_action is "run the direct kernel", so the direct kernel has
+    # to be runnable on this corpus for the advice to mean anything.  Timed against the
+    # gram row above it at the same n and the same queries, since the price is the point.
+    n_d = 100_000
+    t = time.perf_counter()
+    _, vd = certified_topk(c.X[:n_d], c.Q[:scale_m], k=k, kernel="direct", chunk=chunk)
+    res["direct"] = {"n": n_d, "m": int(vd.n_queries), "refused": int(vd.n_refused),
+                     "reason": vd.reason, "status": vd.status,
+                     "seconds": time.perf_counter() - t,
+                     "gram_seconds": next(r["seconds"] for r in res["scale"] if r["n"] == n_d)}
+
+    # The full query block, chunked: m x n float64 scores is 8.0 GB in one allocation at
+    # m = 1,000 and 0.8 GB at chunk = 100, which is the whole reason the argument exists.
+    t = time.perf_counter()
+    idx, v = certified_topk(c.X, c.Q[:m], k=k, chunk=chunk)
+    refused = {f.row for f in v.frontiers}
+    certified = [i for i in range(m) if i not in refused]
+    res["full"] = {
+        "m": int(v.n_queries), "refused": int(v.n_refused), "reason": v.reason,
+        "seconds": time.perf_counter() - t, "peak_mb": _peak_mb(),
+        "unchunked_scores_gb": m * len(c.X) * 8 / 1e9,
+        "chunked_scores_gb": chunk * len(c.X) * 8 / 1e9,
+        "n_certified": len(certified),
+        "gt_certified": _gt_agreement(idx, c.truth, certified),
+        "gt_all": _gt_agreement(idx, c.truth[:m]),
+        "gt_refused_disagree": sum(
+            set(idx[i].tolist()) != set(c.truth[i].tolist()) for i in refused
+        ),
+        "zero_gap_frontiers": sum(f.gap == 0.0 for f in v.frontiers),
+        "median_gap": float(np.median([f.gap for f in v.frontiers])) if v.frontiers else 0.0,
+        "median_width": float(np.median([f.width for f in v.frontiers])) if v.frontiers else 0.0,
+    }
+    # The refused rows the published truth differs on, decided exactly.  This is the
+    # `flipped` column of section 3 with a third party holding the answer: either exact
+    # arithmetic moves the float set onto the published one (a flip this package caught),
+    # or it reports EXACT_TIE and both answers are correct.
+    disputed = sorted(i for i in refused if set(idx[i].tolist()) != set(c.truth[i].tolist()))
+    del idx
+    tie = flipped = resolved_still_differ = 0
+    if disputed:
+        di, dv = certified_topk(c.X, c.Q[disputed], k=k, chunk=chunk, escalate=True)
+        still = {f.row for f in dv.frontiers}
+        for j, i in enumerate(disputed):
+            same = set(di[j].tolist()) == set(c.truth[i].tolist())
+            if j in still:
+                tie += 1 if dv.reason == EXACT_TIE else 0
+            elif same:
+                flipped += 1
+            else:
+                resolved_still_differ += 1
+        res["full"]["disputed_escalated"] = int(dv.n_escalated)
+        res["full"]["disputed_reason"] = dv.reason
+        del di
+    res["full"]["disputed"] = len(disputed)
+    res["full"]["disputed_rows"] = disputed
+    res["full"]["disputed_tie"] = tie
+    res["full"]["disputed_flipped"] = flipped
+    res["full"]["disputed_resolved_still_differ"] = resolved_still_differ
+
+    # escalation on the scale_m block: what exact arithmetic does with those refusals
+    t = time.perf_counter()
+    ei, ev = certified_topk(c.X, c.Q[:scale_m], k=k, chunk=chunk, escalate=True)
+    res["escalated"] = {
+        "m": int(scale_m), "still_refused": int(ev.n_refused), "reason": ev.reason,
+        "status": ev.status, "exit": int(ev.exit_code),
+        "n_exact_products": int(ev.n_escalated),
+        "float_set_differed": bool(ev.float_set_differed),
+        "rows": sorted({f.row for f in ev.frontiers}),
+        "seconds": time.perf_counter() - t,
+        "gt_disagree_rows": sorted(
+            i for i in range(scale_m) if set(ei[i].tolist()) != set(c.truth[i].tolist())
+        ),
+    }
+    del ei
+
+    # the float16 door, on real bytes rather than on a generated corpus
+    _, v16 = certified_topk(c.X[:200_000].astype(np.float16),
+                            c.Q[:scale_m].astype(np.float16), k=k, chunk=chunk)
+    res["fp16"] = {"status": v16.status, "reason": v16.reason, "exit": int(v16.exit_code),
+                   "detail": v16.detail}
+
+    res["integers"] = sift_integers(c.X, c.Q[:exact_queries])
+    res["peak_mb"] = _peak_mb()
+    return res
+
+
+def sift_table(r):
+    f = r["full"]
+    e = r["escalated"]
+    last = r["scale"][-1]
+    L = [f"  corpus  {r['name']}  d={r['shape'][1]}, k={r['k']}",
+         f"          integer-valued components {r['integral']};  "
+         f"||x||^2 median {r['norm2_median']:.3e}, max {r['norm2_max']:.3e}",
+         "",
+         "  refused against corpus size, the same 100 queries, gram/cheap float32",
+         "    n              refused   seconds  reason"]
+    for row in r["scale"]:
+        L.append(f"    {row['n']:>10,}  {row['refused']:>4}/{row['m']:<4}  {row['seconds']:>7.2f}"
+                 f"  {row['reason'] or '-'}")
+    L += ["",
+          f"  the advice on GRAM_CANCELLATION, run: direct kernel at n = {r['direct']['n']:,}",
+          f"    refused                             {r['direct']['refused']}/{r['direct']['m']}"
+          f"  ({r['direct']['status']}{'/' + r['direct']['reason'] if r['direct']['reason'] else ''})",
+          f"    seconds                             {r['direct']['seconds']:.1f}"
+          f"  against {r['direct']['gram_seconds']:.2f} for gram at the same n",
+          "",
+          f"  the published INRIA ground truth, n = {last['n']:,}, m = {last['m']}",
+          f"    certified rows agreeing with it     {last['gt_certified']}/{last['n_certified']}",
+          f"    all rows agreeing with it           {last['gt_all']}/{last['m']}",
+          "",
+          f"  the full query block, m = {f['m']:,} at chunk = {r['chunk']}",
+          f"    refused                             {f['refused']}/{f['m']}"
+          f"  ({100.0 * f['refused'] / f['m']:.1f}%)",
+          f"    certified agreeing with truth       {f['gt_certified']}/{f['n_certified']}",
+          f"    refused rows the truth differs on   {f['gt_refused_disagree']}  rows "
+          f"{f['disputed_rows']}",
+          f"      of those, exact ties               {f['disputed_tie']}",
+          f"      of those, the float set was wrong  {f['disputed_flipped']}",
+          f"      of those, still differ when exact  {f['disputed_resolved_still_differ']}",
+          f"    frontiers with gap exactly 0        {f['zero_gap_frontiers']}",
+          f"    median frontier gap / width         {f['median_gap']:.3g} / {f['median_width']:.4g}",
+          f"    scores held at once                 {f['chunked_scores_gb']:.2f} GB against "
+          f"{f['unchunked_scores_gb']:.2f} GB unchunked",
+          f"    peak working set                    "
+          f"{f['peak_mb']:.0f} MB" if f["peak_mb"] else "",
+          f"    seconds                             {f['seconds']:.1f}",
+          "",
+          f"  escalation on {e['m']} rows",
+          f"    still refused                       {e['still_refused']}  rows {e['rows']}"
+          f"  ({e['reason']}, {e['status']}, exit {e['exit']})",
+          f"    exact products spent                {e['n_exact_products']}",
+          f"    float set moved under exact         {e['float_set_differed']}",
+          f"    rows the published truth differs on {e['gt_disagree_rows']}",
+          f"    seconds                             {e['seconds']:.1f}",
+          "",
+          f"  float32 scores against int64 arithmetic, {r['integers']['queries']} queries x "
+          f"{r['shape'][0]:,} rows",
+          f"    scores compared                     {r['integers']['scores']:,}",
+          f"    differing                           {r['integers']['differing']}"
+          f"  (max |float32 - exact| = {r['integers']['max_abs']:g})",
+          "",
+          f"  float16 on the same bytes             {r['fp16']['status']} / "
+          f"{r['fp16']['reason']}, exit {r['fp16']['exit']}"]
+    return "\n".join(x for x in L if x != "")
+
+
 def _commit() -> str:
     try:
         return (
@@ -1011,10 +1263,20 @@ def main(argv=None) -> int:
                    help="skip the MNIST and SciFact arms instead of attempting them")
     p.add_argument("--assets", default=None, metavar="DIR",
                    help="write the README's pictures from this same run")
+    p.add_argument("--sift", action="store_true",
+                   help="run only the SIFT1M real-data arm (RESULTS section 10)")
     p.add_argument("--selfcheck", action="store_true")
     a = p.parse_args(argv)
     if a.selfcheck:
         _demo()
+        return 0
+    if a.sift:
+        r = sift_arm(m=1000 if a.m == 300 else a.m, k=a.k)
+        print(sift_table(r))
+        if a.out:
+            with open(a.out, "w", encoding="utf-8") as fh:
+                json.dump(r, fh, indent=2)
+            print(f"  results -> {a.out}")
         return 0
     res = run(n=a.n, m=a.m, d=a.d, k=a.k, seed=a.seed, real=not a.no_download)
     enc = getattr(sys.stdout, "encoding", None) or "ascii"

@@ -180,6 +180,56 @@ def test_escalation_decides_what_the_enclosure_refused():
             assert set(idx[i].tolist()) == set(exact_topk(Q[i], X, 5).tolist())
 
 
+def test_every_frontier_names_its_own_row_after_escalation():
+    """The reporting half of RESULTS 1.1(a), found on SIFT1M and fixed here.
+
+    `escalate_row` hard-coded `row=0` on the Frontier it returns, so after `escalate=True`
+    every surviving frontier claimed row 0: on the 1M-row SIFT corpus the two rows that
+    survived escalation (82 and 93) both printed as row 0, and a consumer reconstructing
+    the refused set from `v.frontiers` read one row refused where two were.
+    """
+    X, Q = near_duplicate_corpus(n=200, d=16, m=40, dups=80, jitter=1e-9)
+    _, v = certified_topk(X, Q, k=5, escalate=True, max_escalations=2)
+    assert v.n_refused >= 2, "this corpus is seeded to leave two rows undecided"
+    assert len({f.row for f in v.frontiers}) == v.n_refused
+    assert sorted(f.row for f in v.frontiers) == sorted({f.row for f in v.frontiers})
+
+
+def test_chunk_is_a_tenth_engine():
+    """`chunk` was validated and then ignored; it now blocks the (m, n) score array.
+
+    It is not a no-op on the arithmetic: BLAS picks a different gemm path for a 1-row
+    right-hand side, so `chunk=1` is a tenth numerically distinct evaluation of the same
+    formula on the same stored bytes. One row of 17 moves here, and it is refused under
+    both. The certified rows are what must agree, and they do.
+    """
+    X, Q = near_duplicate_corpus(n=300, d=16, m=17, dups=60, jitter=1e-8)
+    whole, v0 = certified_topk(X, Q, k=5)
+    assert v0.n_refused > 0, "a corpus with no refusals would not test the boundary"
+    refused0 = {f.row for f in v0.frontiers}
+    moved = 0
+    for c in (1, 4, 17, 64):
+        part, v = certified_topk(X, Q, k=5, chunk=c)
+        refused = {f.row for f in v.frontiers}
+        assert v.n_refused == len(refused)
+        for i in range(len(Q)):
+            if np.array_equal(whole[i], part[i]):
+                continue
+            moved += 1
+            assert i in refused0 and i in refused, (
+                f"row {i} moved between chunk={c} and the unchunked call while certified"
+            )
+    assert moved > 0, "the gemv path moved a row here; if it stops, this test is blind"
+
+
+def test_chunk_leaves_escalation_and_its_frontiers_alone():
+    X, Q = near_duplicate_corpus(n=300, d=16, m=17, dups=60, jitter=1e-8)
+    whole, v0 = certified_topk(X, Q, k=5, escalate=True)
+    part, v = certified_topk(X, Q, k=5, chunk=4, escalate=True)
+    assert np.array_equal(whole, part) and v.n_escalated == v0.n_escalated
+    assert [str(f) for f in v.frontiers] == [str(f) for f in v0.frontiers]
+
+
 def test_an_exact_tie_is_not_certified_and_no_precision_removes_it():
     X = np.array([[0.0, 0.0], [1.0, 0.0], [-1.0, 0.0], [3.0, 0.0]], dtype=np.float64)
     Q = X[:1]

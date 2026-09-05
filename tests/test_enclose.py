@@ -407,3 +407,19 @@ def test_interval_clamps_squared_scores_at_zero():
     enc = E.enclose_scores(X, Q, per_pair=True)
     lo, hi = enc.interval(0)
     assert lo[0] == 0.0 and hi[0] > 0.0
+
+
+def test_norms64_blocking_is_exact():
+    """The blocked float64 norm pass returns exactly what the one-shot pass returned.
+
+    Blocking is over rows and each row's reduction is unchanged, so this is bitwise, not
+    approximate. It exists because the one-shot pass allocated a full float64 copy of the
+    corpus -- 1.0 GB on SIFT1M -- before any score was computed.
+    """
+    rng = np.random.default_rng(5)
+    for dt in (np.float32, np.float64):
+        A = (rng.standard_normal((997, 33)) * 1e3).astype(dt)
+        want2 = np.einsum("ij,ij->i", A.astype(np.float64), A.astype(np.float64))
+        got2, got = E._norms64(A)
+        assert np.array_equal(got2, want2)
+        assert np.array_equal(got, np.sqrt(want2))

@@ -281,7 +281,38 @@ Pasted from the commands beside them, one draw, seed 11, commit `4ce5e0b`, on on
 
 **Four of five corpora returned 0 in the last column. Those four are arms where this package
 had nothing to say**, and they are printed at the same size as the one that did. Only the
-clustered arm is evidence the corpus was not too easy.
+clustered arm is evidence the corpus was not too easy. Three of these five corpora are
+generated and two are downloads of a few thousand rows; the nine-engine comparison is not
+run at a million rows, and the real-data table below carries one external answer instead of
+nine internal ones.
+
+### Real data at scale — SIFT1M, scored against a ground truth this repository did not compute
+
+`1,000,000 × 128` INRIA SIFT descriptors, 1,000 queries, k = 10, `chunk=100`, 48.0 s. The
+ANN\_SIFT1M release ships the authors' exact top-100 list, so this is the one table on this
+page whose answer key comes from outside this repository.
+
+| what | measurement |
+|---|---|
+| refused | **52 of 1,000** (5.2%) |
+| CERTIFIED sets agreeing with the published top-10 | **948 of 948** |
+| rows where the published answer differs | **9** |
+| how many of those 9 had been refused first | **9 of 9** |
+| how many of those 9 exact integer arithmetic calls a tie | **9 of 9** |
+| float32 Gram scores differing from exact int64 | **0 of 20,000,000** |
+| float16 on the same bytes | **REFUSED (RANGE\_UNSAFE)**, before any score is read |
+
+The descriptors are integers 0..255, so float32 computes these scores **exactly** — which
+makes the flip count 0 by arithmetic and every non-tie refusal measurable pessimism: the
+median frontier has gap 7.0 against an enclosure width of 16.12, and a true error of 0.
+Three things broke getting here and are fixed in this build: frontiers reported row 0 after
+`--escalate`, `chunk=` was validated and then ignored (1,000 queries × 1M rows is 8.00 GB of
+scores in one allocation), and the float64 norm pass copied the whole corpus (1.02 GB).
+→ [§10](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#10-real-data-at-scale--sift1m-and-a-third-party-holding-the-answer)
+
+```bash
+.venv/Scripts/python bench.py --sift        # downloads 516 MB once, caches under .donotcommit/
+```
 
 ### The kernel switch — where the product actually is
 
@@ -333,8 +364,9 @@ One CERTIFIED decision that exact arithmetic contradicts withdraws the package.
 ```bash
 python -m venv .venv
 .venv/Scripts/pip install -e .              # numpy and scipy are the only hard dependencies
-.venv/Scripts/python -m pytest tests/ -q    # 195 passed, 0 skipped
+.venv/Scripts/python -m pytest tests/ -q    # 200 passed; 1 skips without the SIFT cache
 .venv/Scripts/python bench.py --out results.json --assets assets
+.venv/Scripts/python bench.py --sift        # §10, downloads SIFT1M (516 MB) once
 ```
 
 `bench.py --no-download` skips the two corpora that need a network and runs the rest. `torch`,
@@ -400,6 +432,7 @@ Collected once, here.
 - **`ordered=True` compares k boundaries instead of one** and refuses correspondingly more often. Its column is never merged with the set column.
 - **The rung-1 memory collapse costs refusals where norms vary**: 35 against 26 on MNIST-shaped, 32 against 15 on real MNIST. It costs 0 at d=384 with unit norms. [→ §7.3](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#73-the-shuffled-enclosure-control-is-a-no-op-where-the-design-said-it-would-be)
 - **Never claimed anywhere in this repository:** any GPU number (no CUDA path is designed); any claim about an approximate index (IVF/PQ/HNSW search error is ~1e-2 relative, four orders above the float32 enclosure width, so certifying it would certify the wrong quantity while printing CERTIFIED — `faiss` is not a dependency, not a loader and not a refusal code); accumulator width (P5 is not testable by either probe tried and travels on every verdict as a declared assumption); a machine-checked bound; and **a probability of any kind** — Higham & Mary's `sqrt(n)·u` would cut the width ~19× at d=384 and is cited and refused for exactly that reason. [→ §8](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#8-not-earned)
+- **One corpus carries the real-data-at-scale evidence, and it is an easy one for the arithmetic.** SIFT1M's integer components make its float32 scores exact, so its flip count is 0 *by arithmetic* and it can never produce evidence that rounding chose a ranking. `flipped > 0` stays a property of the generated clustered corpus; the nine-engine agreement table, the tuned-margin baseline, the Dot2 arm, the shuffled-enclosure control and the cost table are all generated-corpus only. [→ §10.7](https://github.com/teerthsharma/separatrix/blob/main/RESULTS.md#107-what-this-section-does-not-carry-and-what-stays-synthetic)
 - **Measured on CPython 3.11.9 only**, on one machine. Two of the five corpora need a network, and every row drawn from them is labelled `(downloaded)`: the three generated corpora reproduce offline and carry 550 of the 1,116 certified sets, so a reader without a network can check that much and no more.
 
 ---

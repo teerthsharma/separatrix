@@ -192,10 +192,16 @@ def escalate_row(
     largest: bool = False,
     max_escalations: int = 64,
     bits: int | None = None,
+    row: int = 0,
 ) -> Escalation:
     """Rung 4: resolve the frontier exactly until the set closes, ties, or runs out.
 
-    ``D`` and ``R`` are one row of the enclosure.  Soundness does not depend on how the
+    ``D`` and ``R`` are one row of the enclosure.  ``row`` is that row's index in the
+    caller's query block and rides on the returned ``Frontier``: escalation happens one
+    row at a time, so this function is the only place that index can come from, and a
+    frontier that reports the wrong row is the reporting half of the soundness bug
+    RESULTS 1.1(a) records -- a consumer reconstructing the refused set from
+    ``v.frontiers`` gets the wrong rows.  Soundness does not depend on how the
     candidate set T is chosen at any iteration -- the max-in/min-out comparison over exact
     integers and outward float images is the proof, and a badly ordered T can only fail to
     close, never certify wrongly.
@@ -221,7 +227,7 @@ def escalate_row(
             sgn * D, R, mask, signed_known, bits
         )
         frontier = Frontier(
-            row=0,
+            row=int(row),
             inside=in_idx,
             outside=out_idx,
             inside_lo=float(D[in_idx] - R[in_idx]),
@@ -290,7 +296,7 @@ def escalate(X, Q, D, R, k: int, rows=None, **kw) -> dict[int, Escalation]:
     out = {}
     for i in rows:
         r = R if R.ndim == 0 else R[i]
-        out[int(i)] = escalate_row(Q[i], X, D[i], r, k, **kw)
+        out[int(i)] = escalate_row(Q[i], X, D[i], r, k, row=int(i), **kw)
     return out
 
 

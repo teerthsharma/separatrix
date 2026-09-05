@@ -11,8 +11,13 @@ provenance
   python    3.11.9 (CPython, MSC v.1938, 64-bit)
   numpy     2.4.6      scipy 1.17.1      torch 2.14.0+cpu
   extras    scikit-learn 1.9.0, datasets 5.0.1, sentence-transformers 6.0.1
-  suite     195 tests, 195 passed, 0 skipped
+  suite     200 tests, 200 passed with the SIFT1M cache present, 0 skipped
+            (199 passed, 1 skipped without it: test_sift1m_when_cached)
   one draw  every table below comes from one bench.py run, seed 11
+  re-run    on the build that adds section 10, `bench.py` was re-run and its results.json
+            compared field by field against the previous one: 6 fields differ and all 6
+            are wall-clock timings measured under load. Every refusal count, agreement
+            count and soundness field reproduces exactly.
 ```
 
 Reproduce everything:
@@ -22,9 +27,14 @@ python -m venv .venv
 .venv/Scripts/pip install -e .
 .venv/Scripts/python -m pytest tests/ -q
 .venv/Scripts/python bench.py --out results.json --assets assets
+.venv/Scripts/python bench.py --sift --out .donotcommit/sift.json   # section 10, 516 MB
 ```
 
 `bench.py --no-download` skips the two corpora that need a network and runs the rest.
+**Sections 1-9 are generated corpora plus two downloads of a few thousand rows. Section 10
+is the only real-data-at-scale section**: one downloaded million-row corpus, scored against
+a ground truth this repository did not compute, and it lists at its end every claim above it
+that stays synthetic-only.
 
 ---
 
@@ -553,3 +563,198 @@ boundary. Two of the five corpora above need a network; every row drawn from the
 labelled `(downloaded)` in this file and in `README.md`, and the three generated corpora
 reproduce offline and carry 550 of the 1,116 certified sets. Measured on CPython 3.11.9
 only.
+
+---
+
+## 10. Real data at scale — SIFT1M, and a third party holding the answer
+
+Everything above section 10 is either generated on this machine or downloaded at a few
+thousand rows. This section is one corpus, downloaded whole, at a million rows, and it is
+the only place in this repository where the answer a certificate is scored against was
+computed by **somebody else**: the ANN\_SIFT1M release ships the authors' exact top-100
+neighbour list beside the vectors.
+
+```
+corpus    SIFT1M, 1,000,000 x 128 float32 base + 10,000 x 128 queries + top-100 truth
+source    huggingface.co/datasets/qbo-odp/sift1m (apache-2.0), mirroring INRIA TEXMEX
+size      516 MB base, 5 MB queries, 4 MB ground truth; cached under .donotcommit/
+fetch     separatrix.corpus.sift1m() -- the loader is committed, the 516 MB is not
+shape     d = 128, k = 10, gram/cheap float32 unless a row says otherwise
+```
+
+Command for every number in this section:
+
+```
+.venv/Scripts/python bench.py --sift --out .donotcommit/sift.json
+```
+
+### 10.1 Three things that broke on it, and what the break was
+
+None of the three is a soundness bug. All three are the difference between a package that
+runs on a 2,000-row corpus in a test and one that runs on the corpus a user has.
+
+**(a) Every frontier reported row 0 after `--escalate`.** `exact.escalate_row` built its
+`Frontier` with `row=0` hard-coded — it is called one row at a time and was never told
+which row it had. On the 100-query SIFT block, escalation leaves two rows undecided, 82 and
+93, and both printed as row 0: a consumer reconstructing the refused set from `v.frontiers`
+read **one** refused row where there were **two**. This is the reporting half of the
+soundness bug 1.1(a) — the same wrong answer to "which rows did you refuse", arrived at a
+different way. `escalate_row` now takes `row=` and `api.certified_topk` passes it;
+`test_every_frontier_names_its_own_row_after_escalation` asserts
+`len({f.row for f in v.frontiers}) == v.n_refused` on the escalated path, which is where
+the invariant was missing. The disputed-row measurement in 10.3 could not have been
+written before this fix: it selects rows by `f.row`.
+
+**(b) `chunk=` was validated and then ignored.** `certified_topk` accepted `chunk`, raised
+on `chunk <= 0`, and never used it. The scores are an `(m, n)` float64 array: 1,000 queries
+against this corpus is **8.00 GB** in one allocation, on a machine with 2.9 GB free. It now
+blocks the query rows — 0.80 GB at `chunk=100` — and the 1,000-query run below is the first
+one that completes here. The CLI takes `--chunk` for the same reason.
+
+Chunking is **not** a no-op on the arithmetic, and calling it one would be the same mistake
+this package exists to name: BLAS picks a different gemm path for a 1-row right-hand side
+than for a 17-row one, so `chunk=1` is a tenth numerically distinct evaluation of the same
+formula on the same stored bytes. Measured on the near-duplicate corpus: **1 row of 17
+moves between `chunk=1` and the unchunked call, and it is REFUSED under both**;
+0 certified rows move, at any of `chunk = 1, 4, 17, 64`. `test_chunk_is_a_tenth_engine`
+asserts both halves and fails if the gemv path ever stops moving that row.
+
+**(c) The float64 norm pass allocated a second copy of the corpus.** `enclose._norms64`
+computed `A.astype(np.float64)` on the whole array before any score existed: **1.02 GB**
+for this corpus's 512 MB of float32, at the moment the caller has least room. It is now
+blocked at ~32 MB of float64 at a time. Blocking is over rows and each row's reduction is
+unchanged, so the values are bitwise identical — `test_norms64_blocking_is_exact` asserts
+equality, not closeness.
+
+Peak working set of the whole arm after all three fixes: **2,565 MB**, against 8.00 GB for
+the score array alone before (b).
+
+### 10.2 Why this corpus is the real-data twin of the exact lattice
+
+SIFT descriptors are integers 0..255 stored as float32. Every Gram intermediate is then an
+integer below 2^24: `||x||^2 <= 2.61e5`, `2<x,q> <= 5.2e5` by Cauchy–Schwarz, and float32
+carries every integer below 1.68e7 exactly. So the float32 score **is** the exact integer
+squared distance, and it is measured rather than argued:
+
+| what | measurement | the control it scored against |
+|---|---|---|
+| float32 Gram scores differing from the exact value | **0 of 20,000,000** (max abs difference 0) | int64 arithmetic over the same bytes, 20 queries × 1,000,000 rows |
+| components that are integer-valued | 100,000 of 100,000 sampled rows | `x == floor(x)` |
+
+The consequence is the strongest statement available about a refusal: on this corpus the
+flip count is **0 by arithmetic**, not by an oracle's opinion. Every refusal that is not an
+exact tie is pessimism, exactly, and the pessimism is now visible as a number: the median
+frontier has **gap 7.0 against width 16.12**, while the true error is **0**.
+
+### 10.3 The certificate against a third party's answer
+
+1,000 queries against the full 1,000,000-row base, `chunk=100`, 48.0 s:
+
+| what | measurement | the control it scored against |
+|---|---|---|
+| refused | **52 of 1,000** (5.2%) | — |
+| CERTIFIED sets agreeing with the published top-10 | **948 of 948** | the ANN\_SIFT1M authors' ground-truth file, computed outside this repository |
+| rows where the published answer differs | **9**, rows 93, 170, 460, 574, 614, 731, 760, 930, 934 | — |
+| how many of those 9 had been refused first | **9 of 9** | — |
+| how many of those 9 exact arithmetic calls a tie | **9 of 9** | `exact.escalate_row`, scaled-integer |
+| how many of those 9 were a float set exact arithmetic moved | **0** | same |
+
+**Every disagreement with the third party is an exact tie, and every one of them was
+refused before it was found.** On a tie both answers are correct and no arithmetic decides
+it; what a certificate has to do there is refuse, and it did. Row 93 is the one small enough to
+print in full: `#196106` and `#274922` are both at squared distance **42,192** from query
+93 in exact integers. The published list takes `#274922`, this float32 run takes `#196106`,
+and the frontier reports `gap 0.000000e+00` before either is preferred.
+
+On the 100-query block, the same claim with the counts small enough to print:
+
+| n | refused, m = 100 | reason | seconds |
+|---|---|---|---|
+| 10,000 | 2 | GRAM_CANCELLATION | 0.03 |
+| 100,000 | 2 | GRAM_CANCELLATION | 0.38 |
+| 1,000,000 | 11 | BOUNDARY_UNDETERMINED | 5.05 |
+
+Certified rows agreeing with the published truth at n = 1,000,000: **89 of 89**. All rows:
+99 of 100 — the one exception is row 93, refused.
+
+**The prediction on record before this ran was that the refused fraction grows with n**,
+because a fixed-width enclosure has more chances to straddle the rank-k boundary as the
+corpus fills in around it. It held, and it is a statement about the corpus and not about
+the bound: 2%, 2%, 11% at 10k, 100k, 1M.
+
+### 10.4 Escalation, and the two rows nothing decides
+
+100 queries, full base, `escalate=True`, 9.9 s:
+
+| what | measurement |
+|---|---|
+| refused before escalation | 11 of 100 |
+| still refused after | **2** — rows 82 and 93 |
+| verdict | NOT CERTIFIED (EXACT\_TIE), exit 1 |
+| exact scaled-integer products spent | 22 |
+| float sets exact arithmetic moved | **0** |
+
+9 of the 11 refusals were pessimism the escalation rung cleared for 22 exact dot products.
+The other 2 are ties, which is the one outcome no precision removes.
+
+### 10.5 The refusal's advice, run rather than printed
+
+At n = 10,000 and n = 100,000 the refusal is GRAM\_CANCELLATION, whose `next_action` says
+to run the direct kernel. So it was run, on the same queries at the same n:
+
+| kernel | refused, m = 100 | verdict | seconds |
+|---|---|---|---|
+| gram, cheap | 2 of 100 | REFUSED (GRAM\_CANCELLATION) | 0.38 |
+| direct | **0 of 100** | **CERTIFIED** | 3.3 |
+
+The advice works and it costs **8.7×**. That ratio is the product: a code change that
+certifies, at a price named before it is paid, against a re-run at higher precision that
+certifies nothing.
+
+Through the CLI, on the same arrays written to `.npy`:
+
+```
+.venv/Scripts/python -m separatrix check --corpus sift_X.npy --queries sift_Q.npy \
+    --k 10 --chunk 25
+  REFUSED (GRAM_CANCELLATION)                              98/100 determined
+  boundary    row 30: in #54361 [6.928394e+04, 6.930006e+04]  out #31025
+              [6.929094e+04, 6.930706e+04]  gap 7.000000e+00  width 1.611169e+01
+  next        The direct kernel separates this pair; the Gram identity does not.
+exit 2
+
+.venv/Scripts/python -m separatrix check --corpus sift_X.npy --queries sift_Q.npy \
+    --k 10 --chunk 25 --kernel direct
+  CERTIFIED                                               100/100 determined
+exit 0
+```
+
+### 10.6 The float16 must-fix, on downloaded bytes
+
+`||x||^2` has median 2.587e5 and max 2.612e5 on this corpus, against float16's 6.55e4. The
+Gram intermediate `(||q|| + ||x||)^2` reaches 1.04e6.
+
+| what | measurement |
+|---|---|
+| float16 verdict on 100 real queries | **REFUSED (RANGE\_UNSAFE)**, exit 2, before any score is read |
+| query rows the precondition names | 100 of 100 |
+
+MNIST (section 2) was the first real corpus to show this and it was downloaded at 5,000
+rows; SIFT1M shows it again at a million, on different bytes from a different decade.
+
+### 10.7 What this section does not carry, and what stays synthetic
+
+Claims that remain measured only on generated corpora, listed so `README.md` can label
+them:
+
+- **The nine-engine agreement table (section 2).** SIFT1M is not in it. Nine evaluations of
+  a 1,000 × 1,000,000 score array is 72 GB and was not attempted; the real-data agreement
+  evidence here is against the published ground truth instead, which is one external
+  answer rather than nine internal ones. The tenth engine — `chunk` — is measured on the
+  generated near-duplicate corpus only.
+- **`flipped > 0` anywhere.** It stays a property of the clustered generated corpus
+  (section 3). On SIFT1M the flip count is 0 *by arithmetic*, so this corpus can never
+  produce one, and it is not evidence either way about corpora that can.
+- **The tuned-margin baseline (7.2), the shuffled-enclosure control (7.3), the Dot2 arm
+  (7.1), the cost table (6) and the pessimism factor (7.5).** All generated, all unchanged
+  by this section.
+- **Every GPU claim, every approximate-index claim.** Still not earned; see section 8.

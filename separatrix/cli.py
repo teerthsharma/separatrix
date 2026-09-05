@@ -1,7 +1,7 @@
 """separatrix/cli.py -- ``separatrix check`` / ``demo`` / ``probe``.
 
     separatrix check --corpus X.npy --queries Q.npy --k 10
-                     [--kernel gram|direct] [--bound cheap|tight] [--per-pair]
+                     [--kernel gram|direct] [--bound cheap|tight] [--per-pair] [--chunk N]
                      [--escalate] [--upcast] [--ordered] [--largest]
                      [--max-refused FRAC] [--json] [--max-report 20]
     separatrix demo  [--frame cancellation|batch|preview]
@@ -293,6 +293,7 @@ def cmd_check(args, out) -> int:
             ordered=args.ordered,
             escalate=args.escalate,
             upcast=args.upcast,
+            chunk=args.chunk,
         )
     except Refusal as e:  # a precondition, raised before any score was read
         v = refusal_verdict(
@@ -559,6 +560,9 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--ordered", action="store_true")
     c.add_argument("--escalate", action="store_true")
     c.add_argument("--upcast", action="store_true")
+    c.add_argument("--chunk", type=int, default=None, metavar="ROWS",
+                   help="compute the scores ROWS query rows at a time; the (m, n) float64 "
+                        "score array is 8 GB for 10,000 queries against a 1M-row corpus")
     c.add_argument("--max-refused", type=float, default=None, dest="max_refused")
     c.add_argument("--max-report", type=int, default=20, dest="max_report")
     c.add_argument("--json", action="store_true")

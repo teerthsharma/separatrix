@@ -123,6 +123,19 @@ def certified_topk(
     than left to numpy's promotion rules.  Scores are **squared** euclidean distances under
     both kernels; ``largest=True`` negates and reuses the one rule.
 
+    ``chunk`` bounds peak memory: the scores are an (m, n) float64 array, which is 8 GB
+    for 10,000 queries against a 1M-row corpus, and ``chunk=100`` computes them 100 query
+    rows at a time for 80 MB instead.  Until this build the argument was validated and
+    then ignored, so a caller who passed it got the 8 GB allocation anyway.
+
+    **Chunking is a tenth engine, not a no-op.**  BLAS picks a different gemm path for a
+    1-row right-hand side than for a 17-row one, so ``Q @ X.T`` chunked is a numerically
+    distinct evaluation of the same formula on the same stored bytes -- measured here, one
+    row of 17 moves between ``chunk=1`` and the unchunked call on the near-duplicate
+    corpus, and that row was REFUSED under both.  Every CERTIFIED row is identical across
+    chunkings, which is the guarantee and not a coincidence:
+    ``test_chunk_is_a_tenth_engine`` asserts both halves.
+
     The indices returned are the float top-k set, corrected to the exact set on any row
     escalation moved -- returning the float set there would contradict the guarantee, which
     promises the set exact arithmetic returns.  A REFUSED verdict still returns indices:
@@ -170,66 +183,76 @@ def certified_topk(
         dtype_used=np.dtype(work or X.dtype).name,
     )
 
-    try:
-        enc = enclose.enclose_scores(
-            X, Q, kernel=kernel, bound=bound, per_pair=per_pair, work_dtype=work
-        )
-    except Refusal as e:
-        # No score was read, so there is no ranking to hand back beside the refusal.
-        v = _refusal_verdict(e, n_refused=common["n_queries"], **common)
-        report(v)
-        return np.empty((0, k), dtype=np.int64), v
-
-    common.update(
-        kernel=enc.kernel,
-        bound=enc.bound,
-        per_pair=enc.per_pair,
-        dtype_used=enc.dtype_used,
-        canary=enc.canary,
-        accum_assumed=enc.accum_assumed,
-    )
-
-    m = enc.D.shape[0]
+    m = int(Q.shape[0])
+    step = m if chunk is None else min(chunk, m)
     idx = np.empty((m, k), dtype=np.int64)
     frontiers: list[Frontier] = []
     refused_rows: list[int] = []
-    for i in range(m):
-        r = enc.R if enc.R.ndim == 0 else enc.R[i]
-        f = decide.topk_determined(enc.D[i], r, k, largest, ordered=ordered, row=i)
-        idx[i] = np.sort(decide.topk_set(enc.D[i], k, largest=largest))
-        if f is not None:
-            frontiers.append(f)
-            refused_rows.append(i)
-
     n_escalated = 0
     float_set_differed = False
     tied = budgeted = 0
-    if escalate and refused_rows:
-        still: list[int] = []
-        kept: list[Frontier] = []
-        for i, f in zip(list(refused_rows), list(frontiers)):
-            r = enc.R if enc.R.ndim == 0 else enc.R[i]
+    enc = None
+
+    for b0 in range(0, m, step):
+        b1 = min(b0 + step, m)
+        try:
+            enc = enclose.enclose_scores(
+                X, Q[b0:b1], kernel=kernel, bound=bound, per_pair=per_pair, work_dtype=work
+            )
+        except Refusal as e:
+            # No score was read on this block, and a precondition that fails on one block
+            # of queries is a statement about the call: there is no ranking to hand back
+            # beside the refusal, and a partial one would read as a certificate.
+            v = _refusal_verdict(e, n_refused=common["n_queries"], **common)
+            report(v)
+            return np.empty((0, k), dtype=np.int64), v
+
+        if b0 == 0:
+            common.update(
+                kernel=enc.kernel,
+                bound=enc.bound,
+                per_pair=enc.per_pair,
+                dtype_used=enc.dtype_used,
+                canary=enc.canary,
+                accum_assumed=enc.accum_assumed,
+            )
+
+        for j in range(enc.D.shape[0]):
+            i = b0 + j
+            r = enc.R if enc.R.ndim == 0 else enc.R[j]
+            f = decide.topk_determined(enc.D[j], r, k, largest, ordered=ordered, row=i)
+            idx[i] = np.sort(decide.topk_set(enc.D[j], k, largest=largest))
+            if f is None:
+                continue
+            if not escalate:
+                frontiers.append(f)
+                refused_rows.append(i)
+                continue
             e = escalate_row(
                 Q[i],
                 X,
-                enc.D[i],
+                enc.D[j],
                 r,
                 k,
                 largest=largest,
                 max_escalations=max_escalations,
+                row=i,
             )
             n_escalated += e.n_escalated
             idx[i] = e.indices
             if e.determined:
                 float_set_differed |= bool(e.float_set_differed)
                 continue
-            still.append(i)
-            kept.append(e.frontier if e.frontier is not None else f)
+            refused_rows.append(i)
+            frontiers.append(e.frontier if e.frontier is not None else f)
             if e.reason == EXACT_TIE:
                 tied += 1
             else:
                 budgeted += 1
-        refused_rows, frontiers = still, kept
+
+    # The last block's scores are (m_block, n) floats and nothing below needs them.
+    dtype_used, kernel_used = common["dtype_used"], common["kernel"]
+    enc = None
 
     if not refused_rows:
         v = Verdict(
@@ -247,9 +270,9 @@ def certified_topk(
     # separates EVERY refused row's frontier pair; the count prints either way, so the
     # partial case is an exact integer rather than a softened word.
     n_direct = 0
-    if enc.kernel == "gram" and not budgeted and not tied:
+    if kernel_used == "gram" and not budgeted and not tied:
         for i, f in zip(refused_rows, frontiers):
-            if _direct_separates(Q[i], X, f, d, enc.dtype_used):
+            if _direct_separates(Q[i], X, f, d, dtype_used):
                 n_direct += 1
 
     if budgeted:
@@ -265,7 +288,7 @@ def certified_topk(
         f"{len(refused_rows)} of {m} rows have a rank-{k} boundary this enclosure "
         f"does not decide"
     )
-    if enc.kernel == "gram" and n_direct:
+    if kernel_used == "gram" and n_direct:
         detail += (
             f"; the direct kernel separates {n_direct} of those {len(refused_rows)} "
             f"frontier pairs"
