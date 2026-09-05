@@ -11,8 +11,8 @@ provenance
   python    3.11.9 (CPython, MSC v.1938, 64-bit)
   numpy     2.4.6      scipy 1.17.1      torch 2.14.0+cpu
   extras    scikit-learn 1.9.0, datasets 5.0.1, sentence-transformers 6.0.1
-  suite     200 tests, 200 passed with the SIFT1M cache present, 0 skipped
-            (199 passed, 1 skipped without it: test_sift1m_when_cached)
+  suite     212 tests, 212 passed with the SIFT1M cache present, 0 skipped
+            (211 passed, 1 skipped without it: test_sift1m_when_cached)
   one draw  every table below comes from one bench.py run, seed 11
   re-run    on the build that adds section 10, `bench.py` was re-run and its results.json
             compared field by field against the previous one: 6 fields differ and all 6
